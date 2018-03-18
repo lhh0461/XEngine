@@ -1,0 +1,16 @@
+#libevent pkg-config source file
+
+prefix=/home/lhh/workspace/lib
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libevent_extra
+Description: libevent_extra
+Version: 2.2.0-alpha-dev
+Requires:
+Conflicts:
+Libs: -L${libdir} -levent_extra
+Libs.private: 
+Cflags: -I${includedir}
+

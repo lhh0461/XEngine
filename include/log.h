@@ -16,19 +16,19 @@ typedef enum {
 
 void debug_printf(LOG_LEVEL level, const char *filename, int fileline, const char *pformat, ...);
 
-#define LOG_DEBUG(log...) \
+#define log_debug(log...) \
     debug_printf(LOG_DEBUG, __FILE__, __LINE__, log)
 
-#define LOG_INFO(log...) \
+#define log_info(log...) \
     debug_printf(LOG_INFO, __FILE__, __LINE__, log)
 
-#define LOG_WARNING(log...) \
+#define log_warning(log...) \
     debug_printf(LOG_WARNING, __FILE__, __LINE__, log)
 
-#define LOG_ERROR(log...) \
+#define log_error(log...) \
     debug_printf(LOG_ERROR, __FILE__, __LINE__, log)
 
-#define LOG_FATAL(log...) \
+#define log_fatal(log...) \
     debug_printf(LOG_FATAL, __FILE__, __LINE__, log)
 
 

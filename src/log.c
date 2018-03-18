@@ -58,7 +58,7 @@ void debug_printf(LOG_LEVEL level, const char *filename, int fileline, const cha
     va_end(args);
 
     if (g_fp == NULL) {
-        g_fp = fopen(g_log_file, "a");
+        g_fp = fopen(g_log_file, "w");
         if (!g_fp) {
             perror("open log file error.");
             return;

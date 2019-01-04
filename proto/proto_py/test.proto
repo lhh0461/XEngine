@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package test;
+
+enum Type {
+    TYPE1 = 0;
+    TYPE2 = 1;
+}
+
+message HelloRequest {
+  string greeting = 1;
+}
+
+message HelloResponse {
+    string reply = 1;
+}
+

@@ -1,0 +1,1 @@
+g++ client_main.cpp ../proto/output/proto_py/test.pb.cc -std=c++11 -I../3rd/libevent/include -I../3rd/protobuf/include -I../proto/output -L ../3rd/libevent/lib  -L../3rd/protobuf/lib  -levent -lprotobuf -lprotoc -lprotobuf-lite -o main

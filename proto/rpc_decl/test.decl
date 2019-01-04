@@ -1,0 +1,16 @@
+imp hello {
+
+//message HelloRequest
+void rpc_server_test_hello(object user, string buf);
+
+//message HelloResponse
+void rpc_client_test_hello(int uid, string buf);
+
+}
+
+imp cpp {
+
+//message MoveRequest
+void rpc_server_move(object user, string buf);
+
+}

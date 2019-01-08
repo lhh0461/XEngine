@@ -23,7 +23,7 @@ typedef struct list_s {
 #define LIST_PREV_NODE(n) ((n)->prev)
 #define LIST_NODE_DATA(n) ((n)->ptr)
 
-#define LIST_SET_FREE(l,f) (l)->free_func = (f))
+#define LIST_SET_FREE(l,f) ((l)->free_func = (f))
 #define LIST_SET_COMPARE(l,f) ((l)->compare_func = (f))
 
 #define LIST_FOREACH(l,it) \

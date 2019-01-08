@@ -8,6 +8,7 @@ static int PyDirtyDictObject_init(PyDirtyDictObject *self, PyObject *args, PyObj
     printf("on init\n");
     if (PyDict_Type.tp_init((PyObject *)self, args, kwds) < 0)
         return -1;
+    self->dirty_mng = NULL;
     printf("on init success\n");
     return 0;
 }
@@ -16,7 +17,7 @@ static void PyDirtyDictObject_dealloc(PyDirtyDictObject* self)
 {
     printf("on dealloc\n");
     PyDict_Type.tp_dealloc((PyObject *)self);
-    clean_dirty((PyObject *)self);
+    clear_dirty((PyObject *)self);
 }
 
 static int dirty_dict_ass_sub(PyDirtyDictObject *self, PyObject *key, PyObject *val)
@@ -29,13 +30,13 @@ static int dirty_dict_ass_sub(PyDirtyDictObject *self, PyObject *key, PyObject *
         if (!contain) {
             return 0;
         } else {
-            set_dirty_data((PyObject *)self, key, DIRTY_DEL_OP);
+            set_dirty_dict(self, key, DIRTY_DEL_OP);
             return PyDict_Type.tp_as_mapping->mp_ass_subscript((PyObject *)self, key, val);
         }
     } else {
         ret = PyDict_Type.tp_as_mapping->mp_ass_subscript((PyObject *)self, key, val);
         if (ret != 0) return ret;
-        set_dirty_data((PyObject *)self, key, DIRTY_SET_OP);
+        set_dirty_dict(self, key, DIRTY_SET_OP);
     }
     
     return ret;
@@ -94,7 +95,7 @@ dirty_dict_pop(PyDictObject *mp, PyObject *args)
         return NULL;
 
     if (PyDict_GetItem((PyObject *)mp, key)) {
-        set_dirty_data((PyObject *)mp, key, DIRTY_DEL_OP);
+        set_dirty_dict((PyDirtyDictObject *)mp, key, DIRTY_DEL_OP);
     }
 
     return original_dict_pop((PyObject *)mp, args);
@@ -104,19 +105,28 @@ static PyCFunction original_dict_popitem = NULL;
 static PyObject *
 dirty_dict_popitem(PyDictObject *mp)
 {
+    PyErr_Format(PyExc_TypeError, "%s:%d %s not support method '%s'", __FILE__, __LINE__, Py_TYPE(mp)->tp_name, "popitem");
+    return NULL;
+    /*
     printf("on dict_popitem\n");
 
-     PyObject *popitem = original_dict_popitem((PyObject *)mp, NULL);
+    PyObject *popitem = original_dict_popitem((PyObject *)mp, NULL);
 
-     if (PyTuple_CheckExact(popitem)) {
+    printf("on dict_popitem end1\n");
+    if (PyTuple_CheckExact(popitem)) {
+        printf("on dict_popitem end2\n");
         PyObject *key, *value;
+        printf("on dict_popitem end3\n");
         if (PyArg_ParseTuple(popitem, "OO", &key, &value)) {
-            if (PyDict_GetItem((PyObject *)mp, key)) {
-                set_dirty_data((PyObject *)mp, key, DIRTY_DEL_OP);
-            }
+            printf("on dict_popitem end4\n");
+            printf("on dict_popitem end6\n");
+            set_dirty_dict((PyDirtyDictObject *)mp, key, DIRTY_DEL_OP);
         }
-     }
-     return popitem;
+    }
+
+    printf("on dict_popitem end5\n");
+    return popitem;
+    */
 }
 
 void init_dirty_dict(void)

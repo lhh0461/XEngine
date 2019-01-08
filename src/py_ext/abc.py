@@ -3,3 +3,6 @@ print a
 b = a.pop(4)
 print a
 print b
+c = [1,2,3,4]
+c[-2] = 100
+print c

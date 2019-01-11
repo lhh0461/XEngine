@@ -3,39 +3,31 @@ import os
 import datetime
 import json
 import random
+from doc_name import HELLO_WORLD_DOC 
+import db
 
-sys.path.append(os.path.join("build", "lib.linux-x86_64-2.6"))
-sys.path.append(os.path.join("build", "lib.linux-x86_64-2.7"))
-
-import dirty
-a = dirty.load('orgact')
-print(a.keys())
-print(a)
-b = a.pop(2)
-print("b= !!!", b)
-print("after a= !!!", a)
-print(a.values())
-print("test7 !!!")
-c = a[1]
-print("type c!!!", type(c))
-print("c=!!!", c)
-print("a=!!!", a)
-b = a.popitem()
-print("a.keys", a.keys())
-print("b", b)
-'''
-a["2"] = 2
-b = a["1"]
-c = a["1"]
-#print "b=%d" % b
-print type(b)
-print type(a)
-print id(b) == id(c)
-print "before ",a
-c[3]=3
-print "after ",a
-a["3"] = 3
-'''
-print type(c)
-#print(a.pop("1"))
-#print(a.keys())
+a = db.restore_doc(HELLO_WORLD_DOC)
+aa = db.restore_doc(HELLO_WORLD_DOC)
+print("a == aa" ,id(a) == id(aa))
+print("a.dir" ,dir(a))
+print("a.keys" ,a.keys())
+print("a.values" ,a.values())
+print("a init" ,a)
+a["bb"] = 1
+a[2] = 100
+del a[1]
+a[1] = 1
+a["cc"] = {2:{3:3}}
+c= a["cc"][2]
+c[3] = 4
+print("!!!!")
+print("a after=",a)
+#b = dirty.get_dirty_info(a)
+#print("b=",b)
+print("c type=%s, value=%s"%(type(c), c))
+a["dd"] = [2,3,4]
+d = a["dd"]
+d[0] = [5]
+d.append(6)
+print("d type=%s, value=%s"%(type(d), d))
+print("a after=",a)

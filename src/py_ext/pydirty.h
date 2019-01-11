@@ -21,7 +21,21 @@ extern PyTypeObject PyDirtyList_Type;
 #define PyDirtyDict_CheckExact(op) (Py_TYPE(op) == &PyDirtyDict_Type)
 #define PyDirtyList_CheckExact(op) (Py_TYPE(op) == &PyDirtyList_Type)
 
+PyDirtyListObject *PyDirtyList_New(Py_ssize_t size);
+
 void init_dirty_dict(void);
 void init_dirty_list(void);
+
+PyDirtyDictObject *build_dirty_dict(PyDictObject *dict);
+PyDirtyListObject *build_dirty_list(PyListObject *list);
+
+#define SUPPORT_DIRTY_VALUE_TYPE(ob) \
+    (PyDict_CheckExact(ob) || \
+     PyList_CheckExact(ob) || \
+     PyInt_CheckExact(ob) || \
+     PyLong_CheckExact(ob) || \
+     PyFloat_CheckExact(ob) || \
+     PyString_CheckExact(ob))
+
 
 #endif //__PYDIRTY__

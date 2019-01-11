@@ -79,12 +79,14 @@ inline static void overwrite_dirty_key(dirty_node_t *node, PyObject *key, unsign
         }
     }
 
-    PyDict_SetItem((PyObject *)node->dirty_key_dict, key, PyLong_FromLong(op));
+    printf("overwrite dirty key=%p,op=%d\n", key, PyInt_FromLong(op));
+    PyDict_SetItem((PyObject *)node->dirty_key_dict, key, PyInt_FromLong(op));
 }
 
 static PyObject *insert_dict_key(dirty_node_t* dirty_node, PyObject* key, unsigned char op)
 {
-    PyDict_SetItem((PyObject *)dirty_node->dirty_key_dict, key, PyLong_FromLong(op));
+    printf("insert dirty key=%p,op=%d\n", key, op);
+    PyDict_SetItem((PyObject *)dirty_node->dirty_key_dict, key, PyInt_FromLong(op));
     dirty_node->key_cnt++;
     return key;
 } 
@@ -97,14 +99,14 @@ inline static void dirty_root_init(dirty_root_t *dirty_root)
 
 inline static void dirty_root_add(dirty_root_t *dirty_root, dirty_node_t *dirty_node)
 {
-    //fprintf(stderr, "add dirty node:%p to dirty_root:%p\n", dirty_node, dirty_root);
+    printf("add dirty node. root=%p,node=%p\n", dirty_root, dirty_node);
     TAILQ_INSERT_TAIL(&dirty_root->dirty_node_list, dirty_node, entry);
     dirty_root->node_cnt++;
 }
 
 inline static void dirty_root_remove(dirty_root_t *dirty_root, dirty_node_t *dirty_node)
 {
-    //fprintf(stderr, "remove dirty node from list:%p\n", dirty_node);
+    printf("remove dirty node. root=%p,node=%p\n", dirty_root, dirty_node);
     TAILQ_REMOVE(&dirty_root->dirty_node_list, dirty_node, entry);
     dirty_root->node_cnt--;
 }
@@ -112,7 +114,7 @@ inline static void dirty_root_remove(dirty_root_t *dirty_root, dirty_node_t *dir
 static dirty_node_t *new_dirty_node(dirty_mng_t *mng)
 {
     dirty_node_t *dirty_node = (dirty_node_t *)malloc_node(pool_node);
-    //fprintf(stderr, "new dirty node:%p\n", dirty_node);
+    printf("new dirty node:%p\n", dirty_node);
 
     dirty_node->key_cnt = 0;
     dirty_node->dirty_key_dict = (PyDictObject *)PyDict_New();
@@ -128,6 +130,7 @@ static dirty_node_t *new_dirty_node(dirty_mng_t *mng)
 
 static void free_dirty_node(dirty_mng_t *mng)
 {
+    printf("new dirty mng:%p\n", mng);
     dirty_root_t *dirty_root  = get_manage(mng->root)->dirty_root;
     dirty_root_remove(dirty_root, mng->dirty_node);
 
@@ -140,10 +143,11 @@ static void free_dirty_node(dirty_mng_t *mng)
 //todo: Add or Set 入dirty map的value，要检测其是否已经在别的dirty map中，然后再挂入dirty map.
 inline static void attach_node(PyObject *value, PyObject *parent, PyObject *key)
 {
+    printf("attach node value:%p, parent:%p, key:%p\n", value, parent, key);
     if (PyDirtyDict_CheckExact(value)) {
         begin_dirty_manage_dict((PyDirtyDictObject *)value, parent, key);
     } else if (PyDirtyList_CheckExact(value)) {
-        begin_dirty_manage_array((PyDirtyListObject *)value, parent, key);
+        begin_dirty_manage_list((PyDirtyListObject *)value, parent, key);
     }
 }
 
@@ -263,10 +267,8 @@ inline static void accept_dirty_key(PyObject *ob, PyObject *key, unsigned char o
 {
     PyObject *value = NULL;
     dirty_mng_t *mng = NULL;
-    printf("accept dirty key0\n");
 
     if (PyDirtyDict_CheckExact(ob)) {
-        printf("accept dirty key1\n");
         value = PyDict_GetItem(ob, key);
         mng = ((PyDirtyDictObject *)ob)->dirty_mng;
 
@@ -276,34 +278,39 @@ inline static void accept_dirty_key(PyObject *ob, PyObject *key, unsigned char o
         mng = ((PyDirtyListObject *)ob)->dirty_mng;
 
     } else {
-        printf("accept dirty key3\n");
         assert(0);
     }
-    printf("accept dirty key2\n");
 
     if (mng->dirty_node == NULL) {
         new_dirty_node(mng); 
     }
-    printf("accept dirty key3\n");
+    printf("accept dirty key\n");
+    
+    PyObject *parent = mng->parent;
+    PyObject *skey = mng->key;
+    while (parent != NULL) {
+        dirty_mng_t *parent_mng = get_manage(parent);
+        if (parent_mng->dirty_node) {
+            //上层已经设了脏，本层数据修改不用再设脏
+            if (PyDict_Contains((PyObject *)parent_mng->dirty_node->dirty_key_dict, skey)) {
+                return;
+            }
+        }
+        parent = parent_mng->parent;
+        skey = parent_mng->key;
+    }
 
     if (PyDict_Contains((PyObject *)mng->dirty_node->dirty_key_dict, key)) {
-        printf("accept dirty key4\n");
         detach_node(op, value);
-        printf("accept dirty key5\n");
         overwrite_dirty_key(mng->dirty_node, key, op);
-        printf("accept dirty key6\n");
     } else {
-        printf("accept dirty key7\n");
         insert_dict_key(mng->dirty_node, key, op);
-        printf("accept dirty key8\n");
         detach_node(op, value);
-        printf("accept dirty key9\n");
     }
 }
 
 void set_dirty_dict(PyDirtyDictObject *dict, PyObject *key, enum dirty_op_e op)
 {
-    printf("set_dirty_dict\n");
     if (dict->dirty_mng) {
         accept_dirty_key((PyObject *)dict, key, op);
     }
@@ -393,17 +400,18 @@ void begin_dirty_manage_dict(PyDirtyDictObject *svmap, PyObject *parent, PyObjec
     }
 
     svmap->dirty_mng = new_dirty_manage((PyObject *)svmap, parent, skey);
+    printf("begin_dirty_manage_dict\n");
 
     while (PyDict_Next((PyObject *)svmap, &pos, &key, &value)) {
         if (PyDirtyDict_CheckExact(value)) {
             begin_dirty_manage_dict((PyDirtyDictObject *)value, (PyObject *)svmap, key);
         } else if (PyDirtyList_CheckExact(value)) {
-            begin_dirty_manage_array((PyDirtyListObject *)value, (PyObject *)svmap, key);
+            begin_dirty_manage_list((PyDirtyListObject *)value, (PyObject *)svmap, key);
         }
     }
 }
 
-void begin_dirty_manage_array(PyDirtyListObject *svarr, PyObject *parent, PyObject *skey)
+void begin_dirty_manage_list(PyDirtyListObject *svarr, PyObject *parent, PyObject *skey)
 {
     size_t i, size;
     PyObject *item;
@@ -416,6 +424,8 @@ void begin_dirty_manage_array(PyDirtyListObject *svarr, PyObject *parent, PyObje
         return;
     }
 
+    printf("begin_dirty_manage_list\n");
+
     svarr->dirty_mng = new_dirty_manage((PyObject *)svarr, parent, skey);
     size = PyList_GET_SIZE(svarr);
     for (i = 0; i < size; i++) {
@@ -423,7 +433,7 @@ void begin_dirty_manage_array(PyDirtyListObject *svarr, PyObject *parent, PyObje
         if (PyDirtyDict_CheckExact(item)) {
             begin_dirty_manage_dict((PyDirtyDictObject *)item, (PyObject *)svarr, PyLong_FromLong(i));
         } else if (PyDirtyList_CheckExact(item)) {
-            begin_dirty_manage_array((PyDirtyListObject *)item, (PyObject *)svarr, PyLong_FromLong(i));
+            begin_dirty_manage_list((PyDirtyListObject *)item, (PyObject *)svarr, PyLong_FromLong(i));
         }
     }
 }
@@ -486,7 +496,6 @@ void clear_dirty(PyObject *value)
     }
 }
 
-/*
 static PyObject *get_node_from_dirty_manager(dirty_mng_t *mng, PyDictObject *root)
 {
     int c = 0, i;
@@ -511,15 +520,17 @@ static PyObject *get_node_from_dirty_manager(dirty_mng_t *mng, PyDictObject *roo
         mng = *(mngs + i);
         int need_decref_key = 0;
         if (PyDirtyDict_CheckExact(mng->parent)) {
-            key = mng->self_key.map_key;
+            key = mng->key;
+            need_decref_key = 1;
         } else if (PyDirtyList_CheckExact(mng->parent)) {
-            key = PyInt_FromLong(mng->self_key.arr_index);
+            key = mng->key;
             need_decref_key = 1;
         } else {
             fprintf(stderr, "%s:%d get_node_from_dirty_manager error\n", __FILE__, __LINE__);
             assert(0);
         }
 
+        printf("get_node_from_dirty_manager node=%x,key=%x\n", node, key);
         if (!PyDict_Contains(node, key)) {
             value = PyDict_New();
             PyDict_SetItem(node, key, value);
@@ -536,9 +547,7 @@ static PyObject *get_node_from_dirty_manager(dirty_mng_t *mng, PyDictObject *roo
     free((void **)mngs);
     return value;
 }
-*/
 
-/*
 static void get_map_dirty_info(PyDirtyDictObject *map, PyDictObject *ret)
 {
     dirty_mng_t *mng = map->dirty_mng;
@@ -565,9 +574,7 @@ static void get_arr_dirty_info(PyDirtyListObject *arr, PyDictObject *ret)
         PyDict_SetItem(child, key, value);
     }
 }
-*/
 
-/*
 PyObject *get_dirty_info(PyObject *v)
 {
     dirty_mng_t *mng = NULL;
@@ -592,15 +599,57 @@ PyObject *get_dirty_info(PyObject *v)
 
     dirty_root = mng->dirty_root;
 
-    LIST_FOREACH(dirty_root->dirty_node_list, entry) {
+    TAILQ_FOREACH(dirty_node, &dirty_root->dirty_node_list, entry) {
         node = dirty_node->mng->self;
         if (PyDirtyDict_CheckExact(node)) {
+            printf("get map dirty info node=%x\n", node);
             get_map_dirty_info((PyDirtyDictObject *)node, ret);
+            printf("get map dirty info2 node=%x\n", node);
         } else if (PyDirtyList_CheckExact(node)) {
+            printf("get arr dirty info node=%x\n", node);
             get_arr_dirty_info((PyDirtyListObject *)node, ret);
+            printf("get arr dirty info2 node=%x\n", node);
         }
     }
 
     return (PyObject *)ret;
 }
-*/
+
+PyObject *dump_dirty_info(PyObject *v)
+{
+    dirty_mng_t *mng = NULL;
+    dirty_root_t *dirty_root;
+    dirty_node_t *dirty_node; 
+    PyObject *node;
+
+    if (PyDirtyDict_CheckExact(v)) {
+        mng = ((PyDirtyDictObject *)v)->dirty_mng;
+    } else if (PyDirtyList_CheckExact(v)) {
+        mng = ((PyDirtyListObject *)v)->dirty_mng;
+    } else {
+        fprintf(stderr, "%s:%d get_dirty_info fail, not support type\n", __FILE__, __LINE__);
+        return Py_None;
+    }
+
+    if (!mng) {
+        fprintf(stderr, "%s:%d get_dirty_info fail, not enable dirty\n", __FILE__, __LINE__);
+        return Py_None;
+    }
+
+    dirty_root = mng->dirty_root;
+
+    TAILQ_FOREACH(dirty_node, &dirty_root->dirty_node_list, entry) {
+        node = dirty_node->mng->self;
+
+        PyObject *key, *value;
+        Py_ssize_t pos = 0;
+        while (PyDict_Next((PyObject *)dirty_node->dirty_key_dict, &pos, &key, &value)) {
+            if (PyInt_CheckExact(key)) {
+                printf("dirty info node=%x\n,key=%d,op=%d\n", node, PyInt_AsLong(key), PyInt_AsLong(value));
+            }
+            else if (PyString_CheckExact(key)) {
+                printf("dirty info node=%x\n,key=%s,op=%d\n", node, PyString_AsString(key), PyInt_AsLong(value));
+            }
+        }
+    }
+}

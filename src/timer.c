@@ -1,3 +1,4 @@
+//定时器，引擎用
 #include <stdlib.h>
 #include <event2/event.h>
 
@@ -34,4 +35,19 @@ int add_timer(TIMER_TYPE type, struct timeval *tv, void (*cb)(void *), void * ar
     event_add(timer->evtimer, tv);
     
     return 0;
+}
+
+static void
+timeout_cb(void *arg)
+{
+    printf("on timeout cb\n");
+}
+
+int init_timer()
+{
+    struct timeval tv;
+
+    evutil_timerclear(&tv);
+    tv.tv_sec = 10;
+    add_once_timer(&tv, timeout_cb, (void *)NULL);
 }

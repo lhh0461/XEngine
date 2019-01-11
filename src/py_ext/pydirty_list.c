@@ -7,9 +7,11 @@
 static int
 list_ass_subscript(PyDirtyListObject *self, PyObject *item, PyObject *value)
 {
-    //printf("I have hack list, bingo\n");
+    printf("I have hack list, bingo\n");
     if (NULL != value) {
-        //CHECK_SUPPORT_VALUE_TYPE_OR_RETURN(value, -1)
+        if (!SUPPORT_DIRTY_VALUE_TYPE(value)) {
+            return -1;
+        }
 
         dirty_mng_t *vmng = NULL;
         if (PyDirtyDict_CheckExact(value)) {
@@ -116,27 +118,27 @@ PyTypeObject PyDirtyList_Type = {
 PyDirtyListObject *PyDirtyList_New(Py_ssize_t size)
 {
     size_t nbytes;
-    PyDirtyListObject *obj;
-    PyListObject *op;
+    PyDirtyListObject *ob;
+    PyListObject *listob;
 
-    obj = (PyDirtyListObject *)PyObject_CallObject((PyObject *)&PyDirtyList_Type, NULL);
-    op = (PyListObject *)obj;
+    ob = (PyDirtyListObject *)PyObject_CallObject((PyObject *)&PyDirtyList_Type, NULL);
+    if (ob == NULL) return NULL;
+    listob = (PyListObject *)ob;
 
-    //printf("srcsize:%d, size:%d, srcallocated:%d, allocated:%d, ob_item:%p\n", Py_SIZE(op), size, op->allocated, size, op->ob_item);
     if (size > 0) {
         nbytes = size * sizeof(PyObject *);
-        op->ob_item = (PyObject **) PyMem_MALLOC(nbytes);
-        if (op->ob_item == NULL) {
-            Py_DECREF(op);
+        listob->ob_item = (PyObject **) PyMem_Malloc(nbytes);
+        if (listob->ob_item == NULL) {
+            Py_DECREF(ob);
             PyErr_NoMemory();
             return NULL;
         }
-        memset(op->ob_item, 0, nbytes);
-        Py_SIZE(op) = size;
-        op->allocated = size;
+        memset(listob->ob_item, 0, nbytes);
+        Py_SIZE(listob) = size;
+        listob->allocated = size;
     }
 
-    return obj;
+    return ob;
 }
 
 // 原始的list method
@@ -152,18 +154,20 @@ static PyCFunction src_listsort = NULL;
 static PyObject *
 listappend(PyDirtyListObject *self, PyObject *v)
 {
+/*
     PyErr_Format(PyExc_TypeError, "%s:%d %s not support method '%s'", __FILE__, __LINE__, Py_TYPE(self)->tp_name, "append");
     return NULL;
-    /*
-    //printf("hack append\n");
-    CHECK_SUPPORT_VALUE_TYPE_OR_RETURN(v, NULL)
+    */
+    printf("list  append\n");
+    if (!SUPPORT_DIRTY_VALUE_TYPE(v)) {
+        return NULL;
+    }
 
     PyObject *ret = src_listappend((PyObject *)self, v);
     if (ret != NULL) {
-    set_dirty_arr(self, PyList_GET_SIZE(self) - 1, DIRTY_ADD);
+        set_dirty_list(self, PyLong_FromSsize_t(PyList_GET_SIZE(self) - 1), DIRTY_ADD_OP);
     }
     return ret;
-    */
 }
 
 static PyObject *
@@ -345,15 +349,6 @@ listsort(PyListObject *self, PyObject *args, PyObject *kwds)
 
 void init_dirty_list(void)
 {
-    /*
-    //memcpy(&PyDirtyList_Type, &PyList_Type, sizeof(PyList_Type));
-    PyDirtyList_Type = PyList_Type;
-    PyDirtyList_Type.tp_name = "DirtyList",
-    PyDirtyList_Type.tp_basicsize = sizeof(PyDirtyListObject);
-    PyDirtyList_Type.tp_dealloc = (destructor)DirtyList_dealloc;
-    PyDirtyList_Type.tp_init = (initproc)DirtyList_init;
-    */
-
     PyDirtyList_Type.tp_base = &PyList_Type;
 
     // hack tp_as_mapping
@@ -408,5 +403,3 @@ void init_dirty_list(void)
         def++;
     }
 }
-
-

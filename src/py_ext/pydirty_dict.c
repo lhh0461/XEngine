@@ -24,6 +24,7 @@ static int dirty_dict_ass_sub(PyDirtyDictObject *self, PyObject *key, PyObject *
 {
     printf("on dirty_dict_ass_sub\n");
     int ret;
+    PyObject *new = NULL;
 
     int contain = PyDict_Contains((PyObject *)self, key);
     if (val == NULL) {
@@ -31,12 +32,28 @@ static int dirty_dict_ass_sub(PyDirtyDictObject *self, PyObject *key, PyObject *
             return 0;
         } else {
             set_dirty_dict(self, key, DIRTY_DEL_OP);
-            return PyDict_Type.tp_as_mapping->mp_ass_subscript((PyObject *)self, key, val);
+            return PyDict_DelItem((PyObject *)self, key);
         }
     } else {
-        ret = PyDict_Type.tp_as_mapping->mp_ass_subscript((PyObject *)self, key, val);
+        if (!SUPPORT_DIRTY_VALUE_TYPE(val)) return -1;
+
+        if (PyDict_CheckExact(val)) {
+            new = (PyObject *)build_dirty_dict((PyDictObject *)val);
+            begin_dirty_manage_dict((PyDirtyDictObject *)new, (PyObject *)self, key);
+        } else if (PyList_CheckExact(val)) {
+            new = (PyObject *)build_dirty_list((PyListObject *)val);
+            begin_dirty_manage_list((PyDirtyListObject *)new, (PyObject *)self, key);
+        } else {
+            new = val;
+        }
+
+        ret = PyDict_SetItem((PyObject *)self, key, new);
         if (ret != 0) return ret;
-        set_dirty_dict(self, key, DIRTY_SET_OP);
+        if (!contain) {
+            set_dirty_dict(self, key, DIRTY_ADD_OP);
+        } else {
+            set_dirty_dict(self, key, DIRTY_SET_OP);
+        }
     }
     
     return ret;
@@ -64,7 +81,7 @@ PyTypeObject PyDirtyDict_Type = {
     0,                         /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT|        /* tp_flags */
        Py_TPFLAGS_BASETYPE, 
-    "Dirty Save objects",           /* tp_doc */
+    "Dirty Dict Object",           /* tp_doc */
     0,                       /* tp_traverse */
     0,                       /* tp_clear */
     0,                       /* tp_richcompare */
@@ -85,8 +102,7 @@ PyTypeObject PyDirtyDict_Type = {
 };
 
 static PyCFunction original_dict_pop = NULL;
-static PyObject *
-dirty_dict_pop(PyDictObject *mp, PyObject *args)
+static PyObject *dirty_dict_pop(PyDictObject *mp, PyObject *args)
 {
     printf("on dict_pop\n");
     PyObject *key, *deflt = NULL;
@@ -102,31 +118,21 @@ dirty_dict_pop(PyDictObject *mp, PyObject *args)
 }
     
 static PyCFunction original_dict_popitem = NULL;
-static PyObject *
-dirty_dict_popitem(PyDictObject *mp)
+static PyObject *dirty_dict_popitem(PyDictObject *mp)
 {
     PyErr_Format(PyExc_TypeError, "%s:%d %s not support method '%s'", __FILE__, __LINE__, Py_TYPE(mp)->tp_name, "popitem");
     return NULL;
-    /*
-    printf("on dict_popitem\n");
+}
 
-    PyObject *popitem = original_dict_popitem((PyObject *)mp, NULL);
-
-    printf("on dict_popitem end1\n");
-    if (PyTuple_CheckExact(popitem)) {
-        printf("on dict_popitem end2\n");
-        PyObject *key, *value;
-        printf("on dict_popitem end3\n");
-        if (PyArg_ParseTuple(popitem, "OO", &key, &value)) {
-            printf("on dict_popitem end4\n");
-            printf("on dict_popitem end6\n");
-            set_dirty_dict((PyDirtyDictObject *)mp, key, DIRTY_DEL_OP);
-        }
+static PyCFunction original_dict_clear = NULL;
+static PyObject *dirty_dict_clear(PyDictObject *dict)
+{
+    PyObject *key, *value;
+    Py_ssize_t pos = 0;
+    while (PyDict_Next((PyObject *)dict, &pos, &key, &value)) {
+        set_dirty_dict((PyDirtyDictObject *)dict, key, DIRTY_DEL_OP);
     }
-
-    printf("on dict_popitem end5\n");
-    return popitem;
-    */
+    return original_dict_clear((PyObject *)dict, NULL);
 }
 
 void init_dirty_dict(void)
@@ -158,7 +164,8 @@ void init_dirty_dict(void)
             method->ml_meth = (PyCFunction)dirty_dict_popitem;
         }
         else if (strcmp(method->ml_name, "clear") == 0) {
-            
+            original_dict_clear = method->ml_meth;
+            method->ml_meth = (PyCFunction)dirty_dict_clear;
         }
     }
 

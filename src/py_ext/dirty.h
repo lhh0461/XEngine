@@ -50,8 +50,10 @@ void clear_dirty(PyObject *self);
 void dirty_mem_pool_setup(void);
 
 void begin_dirty_manage_dict(PyDirtyDictObject *svmap, PyObject *parent, PyObject *skey);
-void begin_dirty_manage_array(PyDirtyListObject *svarr, PyObject *parent, PyObject *skey);
+void begin_dirty_manage_list(PyDirtyListObject *svarr, PyObject *parent, PyObject *skey);
 
 void free_dirty_arr_recurse(PyDirtyListObject *arr);
+PyObject *get_dirty_info(PyObject *v);
+PyObject *dump_dirty_info(PyObject *v);
 
 #endif //__DIRTY_H__

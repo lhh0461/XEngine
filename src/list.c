@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include "list.h"
 
+//mem_pool_t *list_pool = NULL;
+//mem_pool_t *node_pool = NULL;
+
 list_t *create_list(void)
 {
     list_t * list = NULL;

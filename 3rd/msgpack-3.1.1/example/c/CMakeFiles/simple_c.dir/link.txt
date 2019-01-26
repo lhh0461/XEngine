@@ -1,0 +1,1 @@
+/usr/bin/cc     CMakeFiles/simple_c.dir/simple_c.c.o  -o simple_c -rdynamic ../../libmsgpackc.a 

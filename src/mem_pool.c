@@ -1,5 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
+
+#include "util.h"
 #include "mem_pool.h"
 #include "log.h"
 
@@ -91,7 +93,7 @@ static inline mem_block_t *create_memory_block(int ent_size, int ent_num)
 
     malloc_memory_size += block->blk_size;
 
-    log_info("create memory block: size:%d, ent:%d, total: %d", ent_size, ent_num, malloc_memory_size);
+    log_info("create memory block: size=%d, ent=%d, total=%d", ent_size, ent_num, malloc_memory_size);
     return block;
 }
 
@@ -126,7 +128,7 @@ mem_pool_t *create_memory_pool(int ent_size, int ent_num)
     return pool;
 }
 
-void* malloc_node(mem_pool_t *pool)
+void *malloc_node(mem_pool_t *pool)
 {
     mem_block_t *block;
     void *node;
@@ -152,10 +154,7 @@ void* malloc_node(mem_pool_t *pool)
     pool->tail = block;
     pool->total_size += block->blk_size;
 
-    node = _malloc_node_from_block(block);
-    assert(node);
-
-    return node;
+    return _malloc_node_from_block(block);
 }
 
 int free_node(mem_pool_t *pool, void *node)

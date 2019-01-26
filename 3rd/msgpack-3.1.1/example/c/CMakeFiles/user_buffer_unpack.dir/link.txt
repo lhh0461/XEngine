@@ -1,0 +1,1 @@
+/usr/bin/cc     CMakeFiles/user_buffer_unpack.dir/user_buffer_unpack.c.o  -o user_buffer_unpack -rdynamic ../../libmsgpackc.a 

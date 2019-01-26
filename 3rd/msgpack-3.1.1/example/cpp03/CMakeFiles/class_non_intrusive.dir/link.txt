@@ -1,0 +1,1 @@
+/usr/bin/c++   -DMSGPACK_DEFAULT_API_VERSION=3 -std=c++98    CMakeFiles/class_non_intrusive.dir/class_non_intrusive.cpp.o  -o class_non_intrusive -rdynamic 

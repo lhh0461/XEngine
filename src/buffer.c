@@ -204,7 +204,7 @@ void buffer_reset(buffer_t *buf)
 int buffer_push(buffer_t *buffer, const char *data, unsigned len)
 {
     const char *data_ptr = data;
-    unsigned howmuch;
+    unsigned howmuch = 0;
 
     if (!buffer) return -1;
 
@@ -312,13 +312,13 @@ char *buffer_pullup(buffer_t *buf)
     return new_blk->head;
 }
 
-int buffer_get_data_size(buffer_t *buf)
+int buffer_get_data_size(const buffer_t *buf)
 {
     if (buf == NULL) return 0;
     return buf->data_size;
 }
 
-int buffer_get_alloc_size(buffer_t *buf)
+int buffer_get_alloc_size(const buffer_t *buf)
 {
     if (buf == NULL) return 0;
     return buf->alloc_size;

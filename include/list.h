@@ -1,6 +1,10 @@
 #ifndef __LIST_H__
 #define __LIST_H__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct list_node_s {
     struct list_node_s *next;
     struct list_node_s *prev;
@@ -36,4 +40,9 @@ void list_add_head(list_t *list, void *ptr);
 void list_insert_node(list_t *list, list_node_t *old_node, void *ptr, int after);
 void list_delete_node(list_t *list, list_node_t *node);
 
+#ifdef __cplusplus
+}
+#endif
+
 #endif //__LIST_H__
+

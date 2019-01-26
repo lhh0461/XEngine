@@ -1,0 +1,1 @@
+/usr/bin/c++   -DMSGPACK_DEFAULT_API_VERSION=3 -std=c++98    CMakeFiles/custom.dir/custom.cpp.o  -o custom -rdynamic 

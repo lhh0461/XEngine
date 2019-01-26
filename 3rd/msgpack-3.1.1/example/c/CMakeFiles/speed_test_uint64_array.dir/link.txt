@@ -1,0 +1,1 @@
+/usr/bin/cc     CMakeFiles/speed_test_uint64_array.dir/speed_test_uint64_array.c.o  -o speed_test_uint64_array -rdynamic ../../libmsgpackc.a 

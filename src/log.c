@@ -20,15 +20,15 @@ static inline const char *_level_string(LOG_LEVEL level)
     switch (level)
     {
         case LOG_DEBUG:
-            return "debug:";
+            return "[debug]";
         case LOG_INFO:
-            return "info:";
+            return "[info]";
         case LOG_WARNING:
-            return "warn:";
+            return "[warn]";
         case LOG_ERROR:
-            return "error:";
+            return "[error]";
         case LOG_FATAL:
-            return "fatal:";
+            return "[fatal]";
         default:
             break;
     }   

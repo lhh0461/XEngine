@@ -1,9 +1,10 @@
 #include <event2/event.h>
 #include "script.h"
+#include "start_up.h"
+#include "rpc.h"
 
 struct event_base *ev_base = NULL;
 
-typedef void (*module_fun_t)(void);
 module_fun_t module_init_fun = NULL;
 module_fun_t module_startup_fun = NULL;
 
@@ -31,7 +32,7 @@ void init()
 void startup()
 {
     if (module_startup_fun != NULL) {
-        module_start_up();
+        module_startup_fun();
     }
 
     event_base_dispatch(ev_base);

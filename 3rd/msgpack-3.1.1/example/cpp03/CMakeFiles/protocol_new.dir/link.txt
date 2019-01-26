@@ -1,0 +1,1 @@
+/usr/bin/c++   -DMSGPACK_DEFAULT_API_VERSION=3 -std=c++98    CMakeFiles/protocol_new.dir/protocol_new.cpp.o  -o protocol_new -rdynamic 

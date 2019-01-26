@@ -1,6 +1,10 @@
 #ifndef __LOG_H__
 #define __LOG_H__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <errno.h>
 #include <assert.h>
 
@@ -34,4 +38,9 @@ void debug_printf(LOG_LEVEL level, const char *filename, int fileline, const cha
 
 void set_log_switch_level(LOG_LEVEL switch_level);
 
+#ifdef __cplusplus
+}
+#endif
+
 #endif //__LOG_H__
+

@@ -1,0 +1,1 @@
+/usr/bin/c++   -DMSGPACK_DEFAULT_API_VERSION=3 -std=c++98    CMakeFiles/simple.dir/simple.cpp.o  -o simple -rdynamic 

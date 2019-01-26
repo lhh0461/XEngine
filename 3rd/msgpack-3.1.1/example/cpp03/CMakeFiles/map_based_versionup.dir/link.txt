@@ -1,0 +1,1 @@
+/usr/bin/c++   -DMSGPACK_DEFAULT_API_VERSION=3 -std=c++98    CMakeFiles/map_based_versionup.dir/map_based_versionup.cpp.o  -o map_based_versionup -rdynamic 

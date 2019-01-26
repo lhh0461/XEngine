@@ -1,6 +1,10 @@
 #ifndef __BUFFER_H__
 #define __BUFFER_H__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "util.h"
 
 //模仿evbuffer实现的buffer模块，把内存块用链表连起来，逻辑空间上是连续的
@@ -28,14 +32,14 @@ typedef struct buffer_s {
 buffer_t *buffer_new(void);
 void buffer_free(buffer_t *buf);
 
-//返回堆分配的buffer，不用再调初始化
+//初始化buffer，分配内存块
 int buffer_init(buffer_t *buf);
 //只清除buffer里的内存块，不释放buf
 void buffer_release(buffer_t *buf);
 void buffer_reset(buffer_t *buf);
 
-int buffer_get_data_size(buffer_t *buf);
-int buffer_get_alloc_size(buffer_t *buf);
+int buffer_get_data_size(const buffer_t *buf);
+int buffer_get_alloc_size(const buffer_t *buf);
 
 //这个函数存储的数据不是连续的
 int buffer_push(buffer_t *buf, const char *data, unsigned len);
@@ -74,4 +78,9 @@ inline static void *buffer_malloc(buffer_t *buf, unsigned size)
     return buf->tail->tail - size;
 }
 
+#ifdef __cplusplus
+}
+#endif
+
 #endif //__BUFFER_H__
+

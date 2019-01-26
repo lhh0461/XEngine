@@ -1,0 +1,11 @@
+prefix=/home/lhh/workspace/engine/3rd/mongo-c-driver
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${exec_prefix}/include
+
+Name: libmongoc
+Description: The libmongoc MongoDB client library.
+Version: 1.1.9
+Requires: libbson-1.0
+Libs:  -lssl -lcrypto -lrt -L${libdir} -lmongoc-1.0
+Cflags: -I${includedir}/libmongoc-1.0

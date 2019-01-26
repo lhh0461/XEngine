@@ -1,6 +1,0 @@
-[2019-01-10 14:22:44] [../mem_pool.c:94] info: create memory block: size:40, ent:1024, total: 45100
-[2019-01-10 14:22:44] [../mem_pool.c:125] info: create memory pool success. ent_size:40,ent_num:1024
-[2019-01-10 14:22:44] [../mem_pool.c:94] info: create memory block: size:40, ent:1024, total: 90200
-[2019-01-10 14:22:44] [../mem_pool.c:125] info: create memory pool success. ent_size:40,ent_num:1024
-[2019-01-10 14:22:44] [../mem_pool.c:94] info: create memory block: size:64, ent:128, total: 98972
-[2019-01-10 14:22:44] [../mem_pool.c:125] info: create memory pool success. ent_size:64,ent_num:128

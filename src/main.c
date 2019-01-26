@@ -1,5 +1,7 @@
 #include <unistd.h>
+#include <glib.h>
 #include <string.h>
+#include <stdlib.h>
 #include <event2/listener.h>
 #include <event2/buffer.h>
 #include <event2/bufferevent.h>
@@ -9,7 +11,16 @@
 #include "rpc.h"
 #include "timer.h"
 #include "script.h"
+#include "start_up.h"
 
+extern void gamed_init(void);
+extern void gamed_startup(void);
+
+extern void dbd_init(void);
+extern void dbd_startup(void);
+
+extern void gated_init(void);
+extern void gated_startup(void);
 
 void usage(void)
 {
@@ -17,38 +28,40 @@ void usage(void)
     exit(0);
 }
 
-int main(int argc, char *argc[])
+int main(int argc, char *argv[])
 {
-    int opt;
+    char opt;
     log_info("server start!");
 
-    while ((opt = getopt(argc, argv, "f:AGTadbr:l:R:O:")) !=  - 1) {
+    module_init_fun = gamed_init;
+    module_startup_fun = gamed_startup;
+
+    while ((opt = getopt(argc, argv, "ldgh")) !=  - 1) {
         switch(opt) {
-            case "l":
-                module_init_fun = logicd_init;
-                module_start_fun = logicd_startup;
+            case 'l':
+                module_init_fun = gamed_init;
+                module_startup_fun = gamed_startup;
                 break;
-            case "d":
+            case 'd':
                 module_init_fun = dbd_init;
-                module_start_fun = dbd_startup;
+                module_startup_fun = dbd_startup;
                 break;
-            case "g":
+            case 'g':
                 module_init_fun = gated_init;
-                module_start_fun = gated_startup;
+                module_startup_fun = gated_startup;
                 break;
-            case "?":
-            case "h":
+            case '?':
+            case 'h':
                 usage();
                 break;
             default:
                 /* You won't actually get here. */
                 printf("unknown opt=%d.\n", opt);
-                return;
+                exit(1);
         }
     }
     
     init();
     startup();
-
     return 0;
 }

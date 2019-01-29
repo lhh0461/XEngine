@@ -2,9 +2,14 @@
 #include <stdio.h>
 #include <stdio.h>
 #include <glib.h>
+
 #include "db.h"
 #include "pydirty.h"
 #include "dirty.h"
+#include "marshal.h"
+#include "buffer.h"
+
+PyObject *DBError;
 
 PyDirtyDictObject *build_dirty_dict(PyDictObject *dict)
 {
@@ -81,7 +86,7 @@ PyDirtyListObject * build_dirty_list(PyListObject *list)
 void set_dirty_dict_subdocs(PyDirtyDictObject *dict, PyObject *subdocs)
 {
     PyObject *key, *value;
-    dict->subdocs = (PyDictObject *)PyDict_New();
+    dict->subdocs = PyDict_New();
     Py_ssize_t size = PyTuple_GET_SIZE(subdocs);
     Py_ssize_t pos = 0;
 
@@ -100,32 +105,35 @@ void set_dirty_dict_subdocs(PyDirtyDictObject *dict, PyObject *subdocs)
 
 static PyObject *sync_load(PyObject *self, PyObject *args)
 {
-    const char*docname;
-    int sid;
+    PyObject *docid;
     PyObject *subdocs;
+    int sid;
+    int state;
 
-    PyObject_Print(args, stdout, 0);
-
-    if (!PyArg_ParseTuple(args, "siO", &docname, &sid, &subdocs)) {
-        return NULL;
-    }
-    printf("load sid=%d\n", sid);
-    printf("load docname=%s\n", docname);
-
-    if (!PyTuple_CheckExact(subdocs)) {
-        //TODO EXCEPTION
+    if (!PyArg_ParseTuple(args, "OiO", &docid, &sid, &subdocs)) {
         return NULL;
     }
 
-    //TODO check is load?
-    PyDictObject *obj = (PyDictObject *)load_dat_sync(docname, sid);
-    if (!obj) {
+    PyDictObject *obj = (PyDictObject *)load_db_obj_sync(docid, sid, &state);
+    if (state == STATE_OK) {
+        if (obj == NULL) {
+            PyErr_SetString(DBError, "load db object error");
+            return NULL;
+        }
+
+    } else if (state == STATE_NULL) {
+        obj = (PyDictObject *)new_db_object(docid);
+    } else if (state == STATE_ERROR) {
+        PyErr_SetString(DBError, "load db object error");
         return NULL;
     }
-    PyObject_Print((PyObject *)obj, stdout, 0);
-    printf("print obj\n");
 
     PyDirtyDictObject *dict = build_dirty_dict(obj);
+    if (!dict) {
+        PyErr_SetString(DBError, "load db object build dirty fail");
+        return NULL;
+    }
+
     set_dirty_dict_subdocs(dict, subdocs);
 
     handle_old_dirty_subdocs(dict);
@@ -135,8 +143,35 @@ static PyObject *sync_load(PyObject *self, PyObject *args)
     return (PyObject *)dict;
 }
 
+static PyObject * async_load(PyObject *self, PyObject *args)
+{
+    PyObject *docid;
+    int sid;
+
+    if (!PyArg_ParseTuple(args, "Oi", &docid, &sid)) {
+        return NULL;
+    }
+
+    int ret = load_db_obj_async(docid, sid);
+    return Py_BuildValue("i", ret);
+}
+
 static PyObject *unload(PyObject *self, PyObject *args)
 {
+    PyObject *docid;
+    PyObject *obj;
+    int save_method; 
+
+    if (!PyArg_ParseTuple(args, "OOi", &docid, &obj, &save_method)) {
+        return NULL;
+    }
+
+    if (save_db_obj(docid, obj, save_method) == -1) {
+        PyErr_SetString(DBError, "unload db object error");
+        return NULL;
+    }
+
+    unload_db_obj(docid);
     
     Py_RETURN_TRUE;
 }
@@ -189,37 +224,18 @@ static PyObject *serialize(PyObject *self, PyObject *args)
 }
 */
 
-static PyObject * async_load(PyObject *self, PyObject *args)
-{
-    char *doc_id;
-    int sid;
-    printf("async load before\n");
-    if (!PyArg_ParseTuple(args, "si", &doc_id, &sid)) {
-        printf("parse tuple faile\n");
-        return 0;
-    }
-
-    printf("async load\n");
-    //if (PyLong_CheckExact(doc_id)) {
-    //    return load_user_async(PyLong_AsLong(doc_id), sid);
-    //} else if (PyUnicode_CheckExact(doc_id)) {
-        int ret = load_dat_async(doc_id, sid);
-        return Py_BuildValue("i", ret);
-    //}
-}
-
 static PyObject *save_all(PyObject *self, PyObject *args)
 {
-    int save_dirty;
+    int save_method;
     PyObject *key, *value;
     Py_ssize_t pos = 0;
     int key_type;
 
-    if (!PyArg_ParseTuple(args, "i", &save_dirty)) {
+    if (!PyArg_ParseTuple(args, "i", &save_method)) {
         return NULL;
     }
 
-    PyObject * dbmodule = PyImport_Import("db");
+    PyObject * dbmodule = PyImport_ImportModule("db");
     if (dbmodule == NULL) {
         return NULL;
     }
@@ -230,28 +246,139 @@ static PyObject *save_all(PyObject *self, PyObject *args)
     }
 
     if (!PyDict_CheckExact(objdict)) {
+        PyErr_Format(PyExc_TypeError, "all_db_obj must be dict tpye  type=%s", Py_TYPE(value)->tp_name);
         return NULL;
     }
      
     while (PyDict_Next((PyObject *)objdict, &pos, &key, &value)) {
-       if (PyLong_CheckExact(key)) {
-           save_user(save_dirty, PyLong_AsLong(key), value);
-       } else {
-           save_dat(save_dirty, PyUnicode_AsUTF8(key), value);
-       }
+        save_db_obj(key, value, save_method);
     }
+
+    Py_RETURN_NONE;
+}
+
+static PyObject *new_doc(PyObject *self, PyObject *args)
+{
+    PyObject *docid;
+    PyObject *subdocs;
+
+    if (!PyArg_ParseTuple(args, "OO", &docid, &subdocs)) {
+        return NULL;
+    }
+
+    PyDictObject *obj = (PyDictObject *)new_db_object(docid);
+    if (obj == NULL) {
+        return NULL;
+    }
+
+    PyDirtyDictObject *dict = build_dirty_dict(obj);
+    if (!dict) {
+        PyErr_SetString(DBError, "load db object build dirty fail");
+        return NULL;
+    }
+
+    set_dirty_dict_subdocs(dict, subdocs);
+
+    handle_old_dirty_subdocs(dict);
+    begin_dirty_manage_dict(dict, NULL, NULL);
+    handle_new_dirty_subdocs(dict);
+
+    return (PyObject *)dict;
+}
+
+static PyObject *save_doc(PyObject *self, PyObject *args)
+{
+    PyObject *docid;
+    PyObject *obj;
+    int save_method;
+
+    if (!PyArg_ParseTuple(args, "OOi", &docid, &obj, &save_method)) {
+        return NULL;
+    }
+
+    if (!PyUnicode_CheckExact(docid) && !PyLong_CheckExact(docid)) {
+        PyErr_Format(PyExc_TypeError, "save doc key must be string or int type=%s", Py_TYPE(docid)->tp_name);
+        return NULL;
+    }
+
+
+    if (!PyDirtyDict_CheckExact(obj)) {
+        PyErr_Format(PyExc_TypeError, "save doc obj must be dirty dirty type type=%s", Py_TYPE(obj)->tp_name);
+        return NULL;
+    }
+     
+    save_db_obj(docid, obj, save_method);
+    Py_RETURN_NONE;
+}
+
+static PyObject *marshal_obj(PyObject *self, PyObject *args)
+{
+    PyObject *obj, *ret;
+    marshal_array_t arr;
+
+    if (!PyArg_ParseTuple(args, "O", &obj)) {
+        return NULL;
+    }
+
+    if (!PyDirtyDict_CheckExact(args)) {
+        return NULL;
+    }
+
+    marshal_array_construct(&arr); 
+    marshal_dirty(obj, &arr);
+
+    char *bytes = buffer_pullup(&arr.buf);
+    unsigned len = arr.buf.data_size;
+    ret = PyUnicode_FromStringAndSize(bytes, len);
+    marshal_array_destruct(&arr);
+
+    if (ret == NULL) return NULL;
+    return Py_BuildValue("N", ret);
+}
+
+static PyObject *enable_dirty(PyObject *self, PyObject *args)
+{
+    PyObject *obj;
+    PyObject *subdocs;
+
+    if (!PyArg_ParseTuple(args, "OO", &obj, &subdocs)) {
+        return NULL;
+    }
+
+    if (!PyDict_CheckExact(obj)) {
+        PyErr_Format(PyExc_TypeError, "save doc obj must be dirty dirty type type=%s", Py_TYPE(obj)->tp_name);
+        return NULL;
+    }
+     
+    if (!PyTuple_CheckExact(subdocs)) {
+        PyErr_Format(PyExc_TypeError, "save doc obj must be dirty dirty type type=%s", Py_TYPE(obj)->tp_name);
+        return NULL;
+    }
+     
+    PyDirtyDictObject *dict = build_dirty_dict((PyDictObject *)obj);
+    if (!dict) {
+        PyErr_SetString(DBError, "load db object build dirty fail");
+        return NULL;
+    }
+
+    set_dirty_dict_subdocs(dict, subdocs);
+
+    handle_old_dirty_subdocs(dict);
+    begin_dirty_manage_dict(dict, NULL, NULL);
+    handle_new_dirty_subdocs(dict);
 
     return (PyObject *)dict;
 }
 
 static PyMethodDef dirty_method[] = {
-    {"sync_load", (PyCFunction)sync_Load, METH_VARARGS, "sync load db obj from db"},
+    {"sync_load", (PyCFunction)sync_load, METH_VARARGS, "sync load db obj from db"},
     {"async_load", (PyCFunction)async_load, METH_VARARGS, "async load db obj from db"},
     {"new_doc", (PyCFunction)new_doc, METH_VARARGS, "new db obj to db"},
     {"unload", (PyCFunction)unload, METH_VARARGS, "save specific db obj to db and release it"},
     {"save_all", (PyCFunction)save_all, METH_VARARGS, "save all db obj to db"},
-    {"save_one", (PyCFunction)save_one, METH_VARARGS, "save specific db obj to db"},
-    {"marshal", (PyCFunction)unload, METH_O, "test marshal dirty dict to bytes"},
+    {"save_doc", (PyCFunction)save_doc, METH_VARARGS, "save one db obj to db"},
+    {"enable_dirty", (PyCFunction)enable_dirty, METH_VARARGS, "save one db obj to db"},
+    {"marshal", (PyCFunction)marshal_obj, METH_VARARGS, "test marshal dirty dict to bytes"},
     {"unmarshal", (PyCFunction)unload, METH_O, "test unmarshal bytes to dirty dict"},
     {"serialize_dirty", (PyCFunction)unload, METH_O, "serialize dirty"},
     {"get_dirty_info", (PyCFunction)pydump_dirty_info, METH_VARARGS, "store save data to db and release"},
@@ -295,6 +422,10 @@ PyMODINIT_FUNC PyInit_dirty(void)
     PyModule_AddObject(m, "dirty_dict", (PyObject *)&PyDirtyDict_Type);
     PyModule_AddObject(m, "dirty_list", (PyObject *)&PyDirtyList_Type);
 
+    DBError = PyErr_NewException("Db.Error", NULL, NULL);
+    Py_INCREF(DBError);
+    PyModule_AddObject(m, "DBError", DBError);
+
     return m;
 }
 
@@ -303,3 +434,4 @@ int init_dirty_module()
     PyImport_AppendInittab("dirty", &PyInit_dirty);
     printf("init dirty module success!!!\n");
 }
+

@@ -8,7 +8,7 @@ struct dirty_mng_s;
 typedef struct {
     PyDictObject dict;
     struct dirty_mng_s *dirty_mng;
-    PyDictObject *subdocs;
+    PyObject *subdocs;
 } PyDirtyDictObject;
 
 typedef struct {
@@ -35,6 +35,7 @@ PyDirtyListObject *build_dirty_list(PyListObject *list);
     (PyDict_CheckExact(ob) || \
      PyList_CheckExact(ob) || \
      PyLong_CheckExact(ob) || \
+     PyUnicode_CheckExact(ob) || \
      PyFloat_CheckExact(ob) || \
      PyBytes_CheckExact(ob))
 

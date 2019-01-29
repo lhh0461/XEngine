@@ -3,21 +3,26 @@
 #include "dirty.h"
 #include "pydirty.h"
 
+extern PyObject *DBError;
+
 static int PyDirtyDictObject_init(PyDirtyDictObject *self, PyObject *args, PyObject *kwds)
 {
-    printf("on init\n");
+    //printf("on init\n");
     if (PyDict_Type.tp_init((PyObject *)self, args, kwds) < 0)
         return -1;
     self->dirty_mng = NULL;
-    printf("on init success\n");
+    self->subdocs = NULL;
+    //printf("on init success\n");
     return 0;
 }
 
 static void PyDirtyDictObject_dealloc(PyDirtyDictObject* self)
 {
-    printf("on dealloc\n");
+    printf("on dealloc show val .\n");
+    PyObject_Print((PyObject *)self, stdout, 0);
+    printf("\n");
+    free_dirty_dict_recurse(self);
     PyDict_Type.tp_dealloc((PyObject *)self);
-    clear_dirty((PyObject *)self);
 }
 
 static int dirty_dict_ass_sub(PyDirtyDictObject *self, PyObject *key, PyObject *val)
@@ -26,25 +31,32 @@ static int dirty_dict_ass_sub(PyDirtyDictObject *self, PyObject *key, PyObject *
     int ret;
     PyObject *new = NULL;
 
+    MY_PYOBJECT_PRINT(self, "on dirty_dict_ass_sub");
+    MY_PYOBJECT_PRINT(key, "on dirty_dict_ass_sub");
+    MY_PYOBJECT_PRINT(val, "on dirty_dict_ass_sub");
+
     int contain = PyDict_Contains((PyObject *)self, key);
-/*
+    if (!PyLong_CheckExact(key) && !PyUnicode_CheckExact(key)) {
+        PyErr_Format(PyExc_TypeError, "%s:%d key must be int or string.", __FILE__, __LINE__);
+        return -1;
+    }
+
     //为了安全根节点有一些操作不允许
-    //设置的key不在子文档列表中不允许
-    //删除子文档列表中的key不允许
+    //1、设置的key不在顶层子文档列表中不允许
+    //2、删除顶层子文档列表中的key不允许
     if (IS_DIRTY_ROOT(self->dirty_mng)) {
         dirty_root_t *dirty_root = self->dirty_mng->dirty_root;
-        assert(dirty_root != NULL);
-        if (PyDict_Contains(dirty_root->sub_doc_dict, key)) {
+        assert(dirty_root != NULL && self->subdocs != NULL);
+        if (PyDict_Contains(self->subdocs, key)) {
             if (val == NULL) {
-                //TODO Exception
-                return 0;
+                PyErr_Format(DBError, "%s:%d forbid del top subdocs key. key : %s", __FILE__, __LINE__, PyUnicode_AsUTF8(PyObject_Repr(key)));
+                return -1;
             }
         } else {
-            //TODO Exception
-            return 0;
+            PyErr_Format(DBError, "%s:%d forbid set top key which not in subdocs. key : %s", __FILE__, __LINE__, PyUnicode_AsUTF8(PyObject_Repr(key)));
+            return -1;
         }
     }
-    */
 
     if (val == NULL) {
         if (!contain) {
@@ -54,7 +66,10 @@ static int dirty_dict_ass_sub(PyDirtyDictObject *self, PyObject *key, PyObject *
             return PyDict_DelItem((PyObject *)self, key);
         }
     } else {
-        if (!SUPPORT_DIRTY_VALUE_TYPE(val)) return -1;
+        if (!SUPPORT_DIRTY_VALUE_TYPE(val)) {
+            PyErr_Format(PyExc_TypeError, "%s:%d unsupported value type. type : %s", __FILE__, __LINE__, Py_TYPE(val)->tp_name);
+            return -1;
+        }
 
         if (PyDict_CheckExact(val)) {
             new = (PyObject *)build_dirty_dict((PyDictObject *)val);
@@ -67,6 +82,11 @@ static int dirty_dict_ass_sub(PyDirtyDictObject *self, PyObject *key, PyObject *
         }
 
         ret = PyDict_SetItem((PyObject *)self, key, new);
+
+        MY_PYOBJECT_PRINT(self, "on dirty_dict_ass_sub set");
+        MY_PYOBJECT_PRINT(key, "on dirty_dict_ass_sub set");
+        MY_PYOBJECT_PRINT(val, "on dirty_dict_ass_sub set");
+
         if (ret != 0) return ret;
         if (!contain) {
             set_dirty_dict(self, key, DIRTY_ADD_OP);
@@ -80,8 +100,91 @@ static int dirty_dict_ass_sub(PyDirtyDictObject *self, PyObject *key, PyObject *
 
 static PyObject * dirty_dict_repr(PyDirtyDictObject *mp)
 {
-    if (PyDict_Type.tp_repr((PyObject *)mp) == NULL) return NULL;
-    printf("on dirty dict repr!!!!\n");
+    //只是拷贝Python dict object显示代码 ^_^
+    //-------------------------------------------------
+    Py_ssize_t i;
+    PyObject *key = NULL, *value = NULL;
+    _PyUnicodeWriter writer;
+    int first;
+
+    i = Py_ReprEnter((PyObject *)mp);
+    if (i != 0) {
+        return i > 0 ? PyUnicode_FromString("{...}") : NULL;
+    }
+
+    if (((PyDictObject *)mp)->ma_used == 0) {
+        Py_ReprLeave((PyObject *)mp);
+        return PyUnicode_FromString("{}");
+    }
+
+    _PyUnicodeWriter_Init(&writer);
+    writer.overallocate = 1;
+    /* "{" + "1: 2" + ", 3: 4" * (len - 1) + "}" */
+    writer.min_length = 1 + 4 + (2 + 4) * (((PyDictObject*)mp)->ma_used - 1) + 1;
+
+    if (_PyUnicodeWriter_WriteChar(&writer, '{') < 0)
+        goto error;
+
+    /* Do repr() on each key+value pair, and insert ": " between them.
+       Note that repr may mutate the dict. */
+    i = 0;
+    first = 1;
+    while (PyDict_Next((PyObject *)mp, &i, &key, &value)) {
+        PyObject *s;
+        int res;
+
+        /* Prevent repr from deleting key or value during key format. */
+        Py_INCREF(key);
+        Py_INCREF(value);
+
+        if (!first) {
+            if (_PyUnicodeWriter_WriteASCIIString(&writer, ", ", 2) < 0)
+                goto error;
+        }
+        first = 0;
+
+        s = PyObject_Repr(key);
+        if (s == NULL)
+            goto error;
+        res = _PyUnicodeWriter_WriteStr(&writer, s);
+        Py_DECREF(s);
+        if (res < 0)
+            goto error;
+
+        if (_PyUnicodeWriter_WriteASCIIString(&writer, ": ", 2) < 0)
+            goto error;
+
+        s = PyObject_Repr(value);
+        if (s == NULL)
+            goto error;
+        res = _PyUnicodeWriter_WriteStr(&writer, s);
+        Py_DECREF(s);
+        if (res < 0)
+            goto error;
+
+        Py_CLEAR(key);
+        Py_CLEAR(value);
+    }
+
+    writer.overallocate = 0;
+    if (_PyUnicodeWriter_WriteChar(&writer, '}') < 0)
+        goto error;
+
+    //-------------------------------------------------
+    //show dirty info start
+    writer.overallocate = 1;
+    
+
+    Py_ReprLeave((PyObject *)mp);
+
+    return _PyUnicodeWriter_Finish(&writer);
+
+error:
+    Py_ReprLeave((PyObject *)mp);
+    _PyUnicodeWriter_Dealloc(&writer);
+    Py_XDECREF(key);
+    Py_XDECREF(value);
+    return NULL;
 }
 
 PyTypeObject PyDirtyDict_Type = {

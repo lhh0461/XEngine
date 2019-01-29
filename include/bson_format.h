@@ -10,14 +10,14 @@ extern "C" {
 
 int pydict_to_bson(PyObject *dict, bson_t * out);
 int bson_to_pydict(const bson_t *b, PyObject *dict);
+int pylist_to_bson(PyObject *list, bson_t * out);
+
+#define I_FORMAT    ("__i__%d")
 
 #define MAX_KEY_LEN			(100)
 #define MAX_KEY_DEPTH		(50)
 
 #define MAX_CAT_KEY_LEN		(MAX_KEY_LEN * MAX_KEY_DEPTH)
-
-#define	I_FORMAT		("__i__%d")
-#define F_FORMAT		("__f__%f")
 
 #define I_LPC_T_BSON(buf, len, i)		\
 		memset(buf, 0, len); 			\
@@ -29,12 +29,13 @@ int bson_to_pydict(const bson_t *b, PyObject *dict);
 		snprintf(buf,len,F_FORMAT,f); 	\
 
 
-#define QTZ_BSON_PRINT(b)	{\
-	char *tmpmsg = bson_as_json(b, NULL); \
-	printf("%s:%s,%s\n", __FILE__, __func__, tmpmsg); \
-	fflush(stdout);\
-	bson_free(tmpmsg); \
-	}\
+#define QTZ_BSON_PRINT(b, msg)               \
+do {\
+    char *tmpmsg = bson_as_json(b, NULL); \
+    printf("%s:%s:%d,%s,%s\n", __FILE__, __func__, __LINE__,msg, tmpmsg); \
+    fflush(stdout);\
+    bson_free(tmpmsg); \
+} while(0);\
 
 void format_test();
 

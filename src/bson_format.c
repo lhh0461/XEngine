@@ -72,7 +72,7 @@ static void _pylist_to_bson(PyObject *list, bson_t * b)
             BSON_APPEND_UTF8(b, "", PyUnicode_AsUTF8AndSize(value, NULL));
         }
         else if (PyLong_CheckExact(value)) {
-            BSON_APPEND_INT64(b, "", PyLong_AS_LONG(value));
+            BSON_APPEND_INT32(b, "", PyLong_AS_LONG(value));
         }
         else if (PyDict_CheckExact(value)) {
             BSON_APPEND_DOCUMENT_BEGIN(b, "", &child); 
@@ -144,7 +144,7 @@ static void _pydict_to_bson(PyObject * dict, bson_t * b)
             long abc = PyLong_AS_LONG(v);
             printf("key=%s\n", key);
             printf("value=%ld\n", abc);
-            BSON_APPEND_INT64(b, key, abc);
+            BSON_APPEND_INT32(b, key, abc);
             //BSON_APPEND_INT64(b, key, PyLong_AS_LONG(v));
         }
         else if (PyDict_CheckExact(v)) {
@@ -170,6 +170,40 @@ static void _pydict_to_bson(PyObject * dict, bson_t * b)
     }
 }
 
+int pylist_to_bson(PyObject *list, bson_t * out)
+{
+#ifdef DEVELOP_MODE
+    size_t 	offset; 
+    bool 	validate; 
+#endif
+
+    if (!list) {
+        return 0;
+    }
+
+    if (!PyList_CheckExact(list)) {
+        return 0;
+    }
+
+    _pylist_to_bson(list, out); 
+
+#ifdef 	DEVELOP_MODE
+    validate = bson_validate(out, BSON_VALIDATE_UTF8,&offset); 
+    // offset 值并不能友好地指出出错数据
+    if(!validate)
+    {
+        assert(false); 
+    }
+    /*
+       BSON_VALIDATE_UTF8 = (1 << 0),
+       BSON_VALIDATE_DOLLAR_KEYS = (1 << 1),
+       BSON_VALIDATE_DOT_KEYS = (1 << 2),
+       BSON_VALIDATE_UTF8_ALLOW_NULL = (1 << 3),
+       */
+#endif
+
+    return 1; 
+}
 
 int pydict_to_bson(PyObject *dict, bson_t * out)
 {
@@ -271,7 +305,7 @@ void check_lpc_key(svalue_t *in , char *out)
 */
 
 
-char int_key_prefix[] = "__i__" ;
+char int_key_prefix[] = "__i__";
 
 static PyObject * check_bson_key(const char * strkey)
 {

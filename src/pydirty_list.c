@@ -7,7 +7,6 @@
 static int
 list_ass_subscript(PyDirtyListObject *self, PyObject *item, PyObject *value)
 {
-    printf("I have hack list, bingo\n");
     if (NULL != value) {
         if (!SUPPORT_DIRTY_VALUE_TYPE(value)) {
             return -1;

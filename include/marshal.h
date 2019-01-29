@@ -122,13 +122,11 @@ void *marshal_array_alloc(marshal_array_t *array, unsigned size);
 void marshal_array_push_int(marshal_array_t *array, int n);
 void marshal_array_push_long(marshal_array_t *array, long n);
 void marshal_array_push_double(marshal_array_t *array, double n);
-//void marshal_array_push_real(marshal_array_t *array, float r);
 void marshal_array_push_nil(marshal_array_t *array);
 
 void marshal_array_push_string(marshal_array_t *array,  const char *str);
-void marshal_array_push_lstring(marshal_array_t *array,  const char *str, size_t len);
 
-//void marshal_array_push_buffer(marshal_array_t *array,  unsigned char *buf, size_t len);
+void marshal_array_push_buffer(marshal_array_t *array,  const char *buf, size_t len);
 
 void marshal_array_push_array(marshal_array_t *array, int cnt);
 void marshal_array_set_array(marshal_array_t *array, void *arr, int cnt);
@@ -137,7 +135,6 @@ void marshal_array_push_mapping(marshal_array_t *array, int cnt);
 void marshal_array_set_mapping(marshal_array_t *array, void *map, int pair);
 
 int marshal_tvalue_size(marshal_tvalue_t *tvalue);
-
 
 typedef struct marshal_array_iter_s {
     unsigned i;
@@ -178,6 +175,11 @@ inline static unsigned FS_DBI_ARRAY_LEN(marshal_array_t *array)
 inline static unsigned FS_DBI_ITER_FIELD_TYPE(marshal_array_iter_t *iter) 
 {
     return iter->tv->common.type;
+}
+
+inline static unsigned FS_DBI_ARRAY_ITEM_SIZE(marshal_array_iter_t *iter) 
+{
+    return iter->cnt;
 }
 
 int marshal(PyObject *value, marshal_array_t *arr);

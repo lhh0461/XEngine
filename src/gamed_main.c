@@ -17,15 +17,24 @@ static void on_recv_db_obj_data(void *arg, dg_msg_header_t *header, void *data, 
     PyObject * obj;
     int sid = header->sid;
     int state = header->state;
-    obj = db_object_recv(header, data, len);
+    obj = recv_db_obj(header, data, len);
     args = Py_BuildValue("iOi", header->state, obj, sid);
     PyObject_Print(args, stdout, 0);
     printf("on recv dbd obj data\n ");
 
-    call_script_func("db", "on_db_object_load", args);
+/*
+    PyDirtyDictObject *dict = build_dirty_dict(obj);
+    set_dirty_dict_subdocs(dict, subdocs);
+
+    handle_old_dirty_subdocs(dict);
+    begin_dirty_manage_dict(dict, NULL, NULL);
+    handle_new_dirty_subdocs(dict);
+    */
+
+    call_script_func("db", "on_db_obj_async_load_succ", args);
 }
 
-static void dbd_msg_handler(void *arg, dg_msg_header_t *header, void *data, size_t len)
+static void dbd_msg_dispatch(void *arg, dg_msg_header_t *header, void *data, size_t len)
 {
     int cmd = header->cmd;
     switch(cmd) {
@@ -40,7 +49,7 @@ static void dbd_msg_handler(void *arg, dg_msg_header_t *header, void *data, size
 
 void on_dbd_connection_recv(struct bufferevent *bufev, void *ctx)
 {
-    READ_PACKET(dg_msg_header_t, bufev, ctx, dbd_msg_handler);
+    READ_PACKET(dg_msg_header_t, bufev, ctx, dbd_msg_dispatch);
 }
 
 void on_dbd_connection_write(struct bufferevent *bev, void *ctx)

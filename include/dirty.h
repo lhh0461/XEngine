@@ -27,6 +27,7 @@ typedef struct dirty_root_s
     unsigned node_cnt;
 } dirty_root_t;
 
+//dict中每一个节点有一个dirty_mng结构体
 typedef struct dirty_mng_s
 {
     PyObject *parent;
@@ -42,7 +43,6 @@ typedef struct dirty_mng_s
 #define get_manage(sv) ( PyDirtyDict_CheckExact(sv) ? ((PyDirtyDictObject *)sv)->dirty_mng : (PyDirtyList_CheckExact(sv) ? ((    PyDirtyListObject *)sv)->dirty_mng : NULL ) )
 
 #define IS_DIRTY_ROOT(mng) ((mng)->self == (mng)->root && (mng)->root != NULL)
-
 
 void set_dirty_dict(PyDirtyDictObject *self, PyObject *key, enum dirty_op_e op);
 void set_dirty_list(PyDirtyListObject *self, PyObject *key, enum dirty_op_e op);
@@ -60,6 +60,8 @@ void free_dirty_arr_recurse(PyDirtyListObject *arr);
 PyObject *get_dirty_info(PyObject *v);
 PyObject *dump_dirty_info(PyObject *v);
 
-int marshal_dirty_dict(PyDirtyDictObject *mp, marshal_array_t *arr);
+int marshal_dirty(PyObject *mp, marshal_array_t *arr);
+
+void free_dirty_dict_recurse(PyDirtyDictObject *map);
 
 #endif //__DIRTY_H__

@@ -30,4 +30,18 @@
 
 #endif
 
+#ifdef NDEBUG
+#define MY_PYOBJECT_PRINT(obj, msg) 
+#else
+#define MY_PYOBJECT_PRINT(obj, msg) \
+    do {                        \
+        fprintf(stdout,"%s:%d: %s\n", __FILE__, __LINE__, msg); \
+        PyObject_Print((PyObject *)obj, stdout, 0); \
+        printf("\n"); \
+    } while (0);
+
+#endif
+
+void print_trace(void);
+
 #endif //__UTIL_H__

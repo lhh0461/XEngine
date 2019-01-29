@@ -3,7 +3,10 @@
 #include <string.h>
 #include <assert.h>
 
+#include "pydirty.h"
 #include "marshal.h"
+#include "util.h"
+
 
 void marshal_array_construct(marshal_array_t *array)
 {
@@ -40,7 +43,7 @@ void *marshal_array_alloc(marshal_array_t *array, unsigned size)
 
 void marshal_array_push_int(marshal_array_t *array, int n)
 {
-    printf("%s\n", __func__);
+    //printf("%s\n", __func__);
     marshal_int_t *val = (marshal_int_t *)marshal_array_alloc(array, sizeof(*val));
     val->type = FS_DBI_INT;
     val->n = n;
@@ -60,13 +63,6 @@ void marshal_array_push_double(marshal_array_t *array, double n)
     val->n = n;
 }
 
-void marshal_array_push_real(marshal_array_t *array, float r)
-{
-    marshal_real_t *val = (marshal_real_t *)marshal_array_alloc(array, sizeof(*val));
-    val->type = FS_DBI_REAL;
-    val->r = r;
-}
-
 void marshal_array_push_nil(marshal_array_t *array)
 {
     //printf("%s\n", __func__);
@@ -74,23 +70,19 @@ void marshal_array_push_nil(marshal_array_t *array)
     val->type = FS_DBI_NIL;
 }
 
-void marshal_array_push_lstring(marshal_array_t *array, const char *str, size_t len)
-{
-    //printf("%s\n", __func__);
-    marshal_string_t *val = (marshal_string_t *)marshal_array_alloc(array, sizeof(*val) + len);
-    val->type = FS_DBI_STRING;
-    val->len = len;
-    memcpy(val->str, str, len);
-}
-
 void marshal_array_push_string(marshal_array_t *array, const char *str)
 {
     //printf("%s\n", __func__);
     //the caller check the str not to be null
-    marshal_array_push_lstring(array, str, strlen(str));
+    size_t len = strlen(str);
+    marshal_string_t *val = (marshal_string_t *)marshal_array_alloc(array, sizeof(*val) + len + 1);
+    val->type = FS_DBI_STRING;
+    val->len = len + 1;
+    memcpy(val->str, str, len);
+    *((char *)val->str + len) = '\0';
 }
 
-void marshal_array_push_buffer(marshal_array_t *array, const unsigned char *buf, size_t len)
+void marshal_array_push_buffer(marshal_array_t *array, const char *buf, size_t len)
 {
     //printf("%s\n", __func__);
     marshal_buffer_t *val = (marshal_buffer_t *)marshal_array_alloc(array, sizeof(*val) + len);
@@ -154,6 +146,7 @@ int marshal_tvalue_size(marshal_tvalue_t *tvalue)
             return (sizeof(marshal_buffer_t) + tvalue->string.len);
         default:
             fprintf(stderr, "[unmarshal] invalid type:%d\n", tvalue->common.type);
+            print_trace();
             return -1;
     }
 }
@@ -176,13 +169,14 @@ int marshal(PyObject *value, marshal_array_t *arr)
         marshal_array_push_double(arr, PyFloat_AS_DOUBLE(value));
     } else if (PyUnicode_CheckExact(value)) {
         //printf("marshal str = %s\n", PyUnicode_AsUTF8AndSize(value, NULL));
-        marshal_array_push_string(arr, PyUnicode_AsUTF8AndSize(value, NULL));
-    } else if (PyDict_CheckExact(value)) {
+        marshal_array_push_string(arr, PyUnicode_AsUTF8(value));
+    } else if (PyDict_CheckExact(value) || PyDirtyDict_CheckExact(value)) {
         if (marshal_mapping(value, arr)) return -1;
-    } else if (PyList_CheckExact(value)) {
+    } else if (PyList_CheckExact(value) || PyDirtyList_CheckExact(value)) {
         if (marshal_array(value, arr)) return -1;
     } else {
         fprintf(stderr, "[marshal] unknow data type [%s]\n", Py_TYPE(value)->tp_name);
+        print_trace();
         return -1;
     }
 
@@ -312,7 +306,7 @@ PyObject *unmarshal(marshal_array_iter_t *iter)
             //printf("on unmarshal buffer\n");
             break;
         case FS_DBI_STRING:
-            v = PyUnicode_FromStringAndSize(tv->string.str, tv->string.len);
+            v = PyUnicode_FromString(tv->string.str);
             FS_DBI_ARRAY_ITER_NEXT(iter);
             //printf("on unmarshal string\n");
             break;
@@ -326,6 +320,7 @@ PyObject *unmarshal(marshal_array_iter_t *iter)
             break;
         default:
             fprintf(stderr, "[unmarshal] unknow data type [%d]\n", tv->common.type);
+            print_trace();
             return NULL;
     }
 

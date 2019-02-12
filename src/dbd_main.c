@@ -200,7 +200,7 @@ int db_object_restore(db_obj_t *obj)
     return ret; 
 }
 
-static int common_dbo_load(void *buf, size_t len, int sync, marshal_array_t *arr)
+static int db_obj_load(void *buf, size_t len, int sync, marshal_array_t *arr)
 {
     marshal_array_iter_t iter;
     FS_DBI_ARRAY_ITER_FIRST(&iter, buf, len);
@@ -258,7 +258,7 @@ void on_recv_db_obj_sync_load_cmd(gd_msg_header_t *header, void *msgdata, int ms
     marshal_array_construct(&arr);
 
     log_info("load db obj begin!");
-    int stat = common_dbo_load(msgdata, msglen, 1, &arr);
+    int stat = db_obj_load(msgdata, msglen, 1, &arr);
 
     memset(&hdr, 0, sizeof(hdr));
     hdr.cmd = CMD_DBD_TO_GAMED_DB_OBJ_DATA;
@@ -284,7 +284,7 @@ void on_recv_db_obj_async_load_cmd(gd_msg_header_t *header, void *msgdata, int m
     marshal_array_construct(&arr);
 
     log_info("async load db obj begin!");
-    int stat = common_dbo_load(msgdata, msglen, 0, &arr);
+    int stat = db_obj_load(msgdata, msglen, 0, &arr);
 
     memset(&hdr, 0, sizeof(hdr));
     hdr.cmd = CMD_DBD_TO_GAMED_DB_OBJ_DATA;
@@ -461,21 +461,15 @@ int unmarshal_dirty_node(PyObject *node, marshal_array_iter_t *iter, bson_t *set
     int pair = iter->tv->map.pair;
     FS_DBI_ARRAY_ITER_NEXT(iter);
 
-    for (int i = 0; i < pair; i++)  {
+    for (int i = 0; i < pair; i++)  
+    {
         memset(keypath, 0, MAX_KEY_LEN);
         strcat(keypath, path);
-        //printf("unmarshal obj dirty path=%s\n", path);
+
         key = unmarshal(iter);
         check_strcat_path(key, keypath);
-        //printf("unmarshal obj key\n");
-        //PyObject_Print(key, stdout, 0);
-        //printf("\n");
         value = unmarshal(iter);
-        //printf("unmarshal obj value\n");
-        //PyObject_Print(value, stdout, 0);
-        //printf("\n");
 
-        //printf("unmarshal obj dirty path=%s\n", path);
         if (value == Py_None)  {
             PyDict_DelItem(node, key);
             BSON_APPEND_UTF8(unset,keypath,"");

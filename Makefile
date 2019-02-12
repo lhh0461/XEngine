@@ -14,6 +14,7 @@ LIBEVENT_DIR:=$(THIRD_PART_DIR)/libevent
 PROTO_DIR:=$(THIRD_PART_DIR)/protobuf
 MONGOC_DIR:=$(THIRD_PART_DIR)/mongo-c-driver
 BSON_DIR:=$(THIRD_PART_DIR)/mongo-c-driver
+MSGPACK_DIR:=$(THIRD_PART_DIR)/msgpack
 
 INC_FILES:=-I$(INC_DIR) \
 	-I$(LIB_DIR)/include \
@@ -21,6 +22,7 @@ INC_FILES:=-I$(INC_DIR) \
 	-I$(PROTO_DIR)/include\
 	-I$(MONGOC_DIR)/include/libmongoc-1.0\
 	-I$(BSON_DIR)/include/libbson-1.0\
+	-I$(MSGPACK_DIR)/include/\
 	-I/usr/include/python3.5
 
 C_SRC_FILES:=$(foreach v, $(SRC_DIR), $(wildcard $(v)/*.c))
@@ -32,16 +34,17 @@ CXX_OBJ_FILES:=$(subst .cpp,.o,$(CXX_SRC_FILES))
 LIBS=-L$(LIB_DIR)/lib \
 	-L$(LIBEVENT_DIR)/lib \
 	-L$(PROTO_DIR)/lib \
-	-L$(MONGOC_DIR)/lib
+	-L$(MONGOC_DIR)/lib \
+	-L$(MSGPACK_DIR)/lib
 
 STATIC_LIBS= -levent  \
 	-lpython3.5m \
 	-lprotobuf \
 	-lmongoc-1.0 \
-	-lbson-1.0
+	-lbson-1.0 \
+	-lmsgpackc
 
-all:$(C_OBJ_FILES) $(CXX_OBJ_FILES)
-#$(CC) $(CFLAGS) $(C_OBJ_FILES) $(CXX_OBJ_FILES) -o $(PROJECT) $(INC_FILES) $(LIBS) $(STATIC_LIBS) $(PKG_FLAG)
+all:$(C_OBJ_FILES)
 	$(CC) $(CFLAGS) $(C_OBJ_FILES) $(CXX_OBJ_FILES) -o $(PROJECT) $(LIBS) $(STATIC_LIBS) $(PKG_FLAG)
 
 $(SRC_DIR)/%.o:$(SRC_DIR)/%.c

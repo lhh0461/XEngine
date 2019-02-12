@@ -418,6 +418,7 @@ int marshal_dirty(PyObject *mp, marshal_array_t *arr)
     return 0;
 }
 
+//--设置脏数据--开始
 inline static void accept_dirty_key(PyObject *ob, PyObject *key, unsigned char op)
 {
     PyObject *value = NULL;
@@ -454,12 +455,13 @@ inline static void accept_dirty_key(PyObject *ob, PyObject *key, unsigned char o
         skey = parent_mng->key;
     }
 
-    //本层设脏，子表脏数据清空
     if (PyDict_Contains((PyObject *)mng->dirty_node->dirty_key_dict, key)) {
         overwrite_dirty_key(mng->dirty_node, key, op);
     } else {
         insert_dict_key(mng->dirty_node, key, op);
     }
+
+    //本层设脏，子表脏数据清空
     if (op == DIRTY_SET_OP || op == DIRTY_DEL_OP) {
         clear_sub_dirty_mng(value);
     }
@@ -478,8 +480,9 @@ void set_dirty_list(PyDirtyListObject *list, PyObject *key, enum dirty_op_e op)
         accept_dirty_key((PyObject *)list, key, op);
     }
 }
-//--设置脏数据
+//--设置脏数据--结束
 
+//--清空脏数据--开始
 static void clear_dirty_dict_recurse(PyDirtyDictObject *map)
 {
     PyObject *key, *value;
@@ -542,9 +545,9 @@ void clear_dirty(PyObject *value)
         }
     }
 }
+//--清空脏数据--开始
 
-//-------------------------只清理不释放
-
+//--释放脏数据--开始
 void free_dirty_dict(PyDirtyDictObject *dict)
 {
     if (dict->dirty_mng) {
@@ -597,7 +600,7 @@ void free_dirty_dict_recurse(PyDirtyDictObject *map)
     free_dirty_dict(map);
 }
 
-//-------------------释放
+//--释放脏数据--结束
 
 void begin_dirty_manage_dict(PyDirtyDictObject *svmap, PyObject *parent, PyObject *skey)
 {
@@ -651,7 +654,6 @@ void begin_dirty_manage_list(PyDirtyListObject *svarr, PyObject *parent, PyObjec
 
     MY_PYOBJECT_PRINT(svarr, "begin_dirty_manage_list");
 }
-//-------------------开始脏数据管理
 
 static PyObject *get_node_from_dirty_manager(dirty_mng_t *mng, PyDictObject *root)
 {
@@ -824,9 +826,7 @@ void handle_old_dirty_subdocs(PyDirtyDictObject *dict)
     Py_ssize_t pos = 0;
     PyDictObject *subdocs = (PyDictObject *)dict->subdocs;
 
-    printf("ndle_old_dirty_subdocs\n");
-    PyObject_Print((PyObject *)dict, stdout, 0);
-    printf("\n");
+    MY_PYOBJECT_PRINT(dict, "before handle old dirty subdocs") ;
 
     //把不在子文档中的数据从脏数据清除
     GList *dellist = NULL;
@@ -840,6 +840,8 @@ void handle_old_dirty_subdocs(PyDirtyDictObject *dict)
 
     g_list_foreach(dellist, delfunc, (gpointer)dict); 
     g_list_free(dellist);
+
+    MY_PYOBJECT_PRINT(dict, "after handle old dirty subdocs") ;
 }
 
 void handle_new_dirty_subdocs(PyDirtyDictObject *dict)
@@ -859,4 +861,6 @@ void handle_new_dirty_subdocs(PyDirtyDictObject *dict)
             }
         }
     }
+
+    MY_PYOBJECT_PRINT(dict, "after handle new dirty subdocs");
 }

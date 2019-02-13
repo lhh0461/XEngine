@@ -112,13 +112,15 @@ def parse_module(module_data):
 
 def parse():
     files = os.listdir("rpc")
+    print(files)
     for f in files:
-        with open("rpc/" + f, 'r') as f:
-            rpcdata = json.load(f)
-            if "MODULE_LIST" in rpcdata:
-                module_list = rpcdata["MODULE_LIST"]
-                for module_data in module_list:
-                    parse_module(module_data)
+        if os.path.splitext(f)[-1] == ".json":
+            with open("rpc/" + f, 'r') as f:
+                rpcdata = json.load(f)
+                if "MODULE_LIST" in rpcdata:
+                    module_list = rpcdata["MODULE_LIST"]
+                    for module_data in module_list:
+                        parse_module(module_data)
 
 
 def sort_struct():
@@ -147,7 +149,7 @@ def write_file():
     global struct_id2name
     global struct_name2id
     global function_id2key
-    with open("rpc.cfg", 'w') as f:
+    with open("rpc/rpc.cfg", 'w') as f:
         f.write('struct_table_num:{num}\n'.format(num=len(all_struct_list))) 
         sorted_id_list = struct_id2name.keys()
         for struct_id in sorted_id_list:
@@ -173,7 +175,7 @@ def write_file():
                 f.write('arg_type:{arg_type},struct_id:{struct_id},array:{array}\n'.
                     format(arg_type=arg_data["type"], struct_id=struct_id, array=arg_data["array"]))
 
-    with codecs.open("rpc_id.py", "w", "utf-8") as f:
+    with codecs.open("script/rpc_id.py", "w", "utf-8") as f:
         print >>f, u'# -*- coding: utf-8 -*-'
         print >>f, u'# 此文件由脚本生成，请勿修改！'
         print >>f, u''

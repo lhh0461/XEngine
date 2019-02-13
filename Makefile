@@ -53,7 +53,9 @@ $(SRC_DIR)/%.o:$(SRC_DIR)/%.c
 $(SRC_DIR)/%.o:$(SRC_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) $< -c -o $@ $(INC_FILES) $(LIBS) $(STATIC_LIBS)
 
-.PHONY:clean
+.PHONY:clean rpc
 clean:
 	-rm $(PROJECT)
 	-rm -rf $(SRC_DIR)/*.o
+rpc:
+	python tools/parse_rpc.py

@@ -14,7 +14,7 @@ struct timeout {
 	int to_flags;				/* misc flags */
 };
 
-void timer_init(void)
+void timer_init(void);
 void timeout_add(struct timeout *, void (*)(struct timeout *, void *), void *, int);
 void timeout_del(struct timeout *);
 

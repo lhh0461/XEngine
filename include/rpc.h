@@ -5,6 +5,9 @@
 extern "C" { 
 #endif
 
+#include <msgpack.h>
+#include <Python.h>
+
 enum field_type_s {
     INT32 = 1,
     STRING = 2,
@@ -63,6 +66,8 @@ typedef struct headr_s
     int pid;
     int paylen;
 } header_t;
+
+int pack(int pid, PyObject *obj, msgpack_sbuffer *sbuf);
 
 #ifdef __cplusplus 
 }

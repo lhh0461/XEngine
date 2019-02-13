@@ -120,4 +120,7 @@ void gamed_startup()
         fprintf(stderr, "Failed to load \"%s\"\n", "test1");
     }
     printf("on gamed_startup3!!!\n");
+
+    //int res = pack(1, PyObject *obj, msgpack_sbuffer *sbuf)
+
 }

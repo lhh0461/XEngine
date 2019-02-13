@@ -355,7 +355,7 @@ int create_rpc_table()
     size_t len = 0;
     ssize_t read;
 
-    fp = fopen("./proto/output/rpc.cfg", "r");
+    fp = fopen("./rpc.cfg", "r");
     if (fp == NULL) {
         printf("open rpc.cfg fail\n");
         return 1;
@@ -363,31 +363,33 @@ int create_rpc_table()
     int struct_num;
     getline(&line, &len, fp);
     sscanf(line, "struct_table_num:%d", &struct_num);
-    g_struct_rpc_table.table = (rpc_struct_t *)calloc(sizeof(rpc_struct_t), struct_num);
+    g_struct_rpc_table.table = (rpc_struct_t *)calloc(struct_num, sizeof(rpc_struct_t));
     g_struct_rpc_table.size = struct_num;
 
     int struct_id;
     char struct_name[200];
+    char field_name[200];
     int field_count;
     rpc_struct_t *pstruct;
     rpc_field_t *field;
     for (int i = 0; i < struct_num; i++) {
         getline(&line, &len, fp);
-        sscanf(line, "struct_id:%d,field_num:%d,struct_name:%s\n", &struct_id, &field_count, struct_name);
-        pstruct = g_struct_rpc_table.table + struct_id;
-        pstruct->field_count = field_count;
-        pstruct->field_list = calloc(sizeof(rpc_field_t) * field_count);
+        sscanf(line, "struct_id:%d,field_num:%d,struct_name=%s", &struct_id, &field_count, struct_name);
+        pstruct = g_struct_rpc_table.table + i;
+        pstruct->field_cnt = field_count;
+        pstruct->field_list = calloc(field_count, sizeof(rpc_field_t));
         for (int j = 0; j < field_count; j++) {
             field = pstruct->field_list + j;
             getline(&line, &len, fp);
-            sscanf(line, "field_type:%d,struct_id:%s,array:%d,field_name=%s\n", &struct_id, &field_count, struct_name);
+            sscanf(line, "field_type:%d,struct_id:%d,array:%d,field_name=%s", &field->type, &field->struct_id, &field->array, field_name);
+            field->name = strdup(field_name);
         }
     }
 
     int function_num;
     getline(&line, &len, fp);
     sscanf(line, "function_table_num:%d", &function_num);
-    g_function_rpc_table.table = (rpc_function_t *)calloc(sizeof(rpc_function_t), function_num);
+    g_function_rpc_table.table = (rpc_function_t *)calloc(function_num, sizeof(rpc_function_t));
     g_function_rpc_table.size = function_num;
 
     int id;

@@ -10,6 +10,8 @@
 
 struct circq timeout_wheel[BUCKETS];	/* Queues of timeouts */
 struct circq timeout_todo;		/* Worklist */
+int ticks;
+
 
 #define MASKWHEEL(wheel, time) (((time) >> ((wheel)*WHEELBITS)) & WHEELMASK)
 
@@ -62,26 +64,22 @@ struct circq timeout_todo;		/* Worklist */
 
 #define CIRCQ_EMPTY(elem) (CIRCQ_FIRST(elem) == (elem))
 
-static int ticks = 0;		
-
 void timer_init(void)
 {
-    int b;
-
     CIRCQ_INIT(&timeout_todo);
-    for (b = 0; b < BUCKETS; b++)
-        CIRCQ_INIT(&timeout_wheel[b]);
+    for (int i = 0; i < BUCKETS; i++)
+        CIRCQ_INIT(&timeout_wheel[i]);
 }
 
-void timeout_add(struct timeout *new_, void (*fn)(struct timeout *, void *), void *arg int to_ticks)
+void timeout_add(struct timeout *new, void (*fn)(struct timeout *, void *), void *arg, int to_ticks)
 {
     // 设置执行时间
-    new_->to_func = fn;
-    new_->to_arg = arg;
-    new_->to_time = to_ticks + ticks;
+    new->to_func = fn;
+    new->to_arg = arg;
+    new->to_time = to_ticks + ticks;
 
     CIRCQ_INSERT(&new->to_list,
-            &BUCKET((new_->to_time - ticks), new_->to_time));
+            &BUCKET((new->to_time - ticks), new->to_time));
 }
 
 void timeout_del(struct timeout *to)

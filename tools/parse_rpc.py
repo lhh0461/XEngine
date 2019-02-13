@@ -60,7 +60,7 @@ def parse_args(arg_data):
         if arg_data["TYPE"] == "STRUCT":
             raise Exception("struct arg must set \"STRUCT\" field")
 
-    ret["type"] = arg_data["TYPE"]
+    ret["type"] = field2id[arg_data["TYPE"]]
     ret["array"] = arg_data["ARRAY"]
     return ret
 
@@ -112,7 +112,6 @@ def parse_module(module_data):
 
 def parse():
     files = os.listdir("rpc")
-    print(files)
     for f in files:
         if os.path.splitext(f)[-1] == ".json":
             with open("rpc/" + f, 'r') as f:
@@ -194,6 +193,7 @@ if __name__ == '__main__':
     sort_function()
     #check_struct()
     write_file()
+    print"parse rpc ok"
 
 #    print("show function list\n",all_function_list)
 #    print("show struct list\n",all_struct_list)

@@ -7,6 +7,7 @@
 #include "pydirty.h"
 #include "unpack.h"
 #include "log.h"
+#include "util.h"
 #include "script.h"
 
 static rpc_function_table_t g_function_rpc_table;
@@ -19,13 +20,13 @@ PyObject *unpack_field(rpc_field_t *field, msgpack_unpacker_t *unpacker);
 rpc_struct_t * get_struct_by_id(int struct_id)
 {
     if (struct_id <= 0 || struct_id > g_struct_rpc_table.size) return NULL;
-    return g_struct_rpc_table.table + struct_id;
+    return g_struct_rpc_table.table + struct_id - 1;
 }
 
 rpc_function_t * get_function_by_id(int function_id)
 {
     if (function_id <= 0 || function_id > g_function_rpc_table.size) return NULL;
-    return g_function_rpc_table.table + function_id;
+    return g_function_rpc_table.table + function_id - 1;
 }
 
 int call_c_function(rpc_function_t *functionp)
@@ -68,14 +69,18 @@ error:
 int check_field_type(int field_type, PyObject *item)
 {
     switch(field_type) {
-        case INT32:
+        case RPC_INT32:
             if (!PyLong_CheckExact(item)) return -1;
-        case STRING:
+            break;
+        case RPC_STRING:
             if (!PyUnicode_CheckExact(item)) return -1;
-        case FLOAT:
+            break;
+        case RPC_FLOAT:
             if (!PyFloat_CheckExact(item)) return -1;
-        case STRUCT:
+            break;
+        case RPC_STRUCT:
             if (!PyDict_CheckExact(item) && !PyDirtyDict_CheckExact(item)) return -1;
+            break;
         default:
             fprintf(stderr, "unknown field type=%d", field_type);
             return -1;
@@ -111,13 +116,16 @@ int pack_struct(rpc_struct_t *pstruct, PyObject *obj, msgpack_packer *pck)
 
 int pack_field(rpc_field_t *field, PyObject *item, msgpack_packer *pck)
 {
-    if (check_field_type(field->type, item) == -1) return -1;
+    if (check_field_type(field->type, item) == -1) {
+        fprintf(stderr, "pack field type error. expected_type=%d,type_name=%s\n", field->type, Py_TYPE(item)->tp_name);
+        return -1;
+    }
 
     switch(field->type) {
-        case INT32:
+        case RPC_INT32:
             msgpack_pack_uint32(pck, (uint32_t)PyLong_AsLong(item));
             break;
-        case STRING: 
+        case RPC_STRING: 
             {
                 Py_ssize_t size; 
                 const char *str = PyUnicode_AsUTF8AndSize(item, &size);
@@ -125,10 +133,10 @@ int pack_field(rpc_field_t *field, PyObject *item, msgpack_packer *pck)
                 msgpack_pack_str_body(pck, str, size); 
             }
             break;
-        case FLOAT:
+        case RPC_FLOAT:
             msgpack_pack_double(pck, PyFloat_AS_DOUBLE(item));
             break;
-        case STRUCT:
+        case RPC_STRUCT:
             {
                 rpc_struct_t *pstruct = get_struct_by_id(field->struct_id);
                 if (pstruct == NULL) {
@@ -162,30 +170,36 @@ int pack_args(rpc_args_t *args, PyObject *obj, msgpack_packer *pck)
             Py_ssize_t size = PyList_Size(item);
             msgpack_pack_array(pck, size); 
             for (int i = 0; i < args->arg_cnt; i++) {
-                pack_field(field, item, pck);
+                if (pack_field(field, item, pck) != 0) return -1;
             }
 
         } else {
-            pack_field(field, item, pck);
+            if (pack_field(field, item, pck) != 0) return -1;
         }
     }
+    return 0;
 }
 
 //pack obj data to buf
 int pack(int pid, PyObject *obj, msgpack_sbuffer *sbuf)
 {
     if (!PyTuple_CheckExact(obj)) {
-       return -1; 
+        fprintf(stderr, "expected pack obj is tuple\n");
+        return -1; 
     }
 
     rpc_function_t * function = get_function_by_id(pid);
-    if (function == NULL) return -1;
+    if (function == NULL) {
+        fprintf(stderr, "can't find pid function. pid=%d\n", pid);
+        return -1;
+    }
 
     msgpack_sbuffer_init(sbuf);
     msgpack_packer pck;
     msgpack_packer_init(&pck, sbuf, msgpack_sbuffer_write);
 
     if (function->args.arg_cnt != PyTuple_Size(obj)) {
+        fprintf(stderr, "tuple obj size is not equal arg cnt. expected=%d, size=%ld\n", function->args.arg_cnt, PyTuple_Size(obj));
         return -1;
     }
 
@@ -239,12 +253,15 @@ error:
 int check_unpack_field_type(int field_type, msgpack_unpacked *pack)
 {
     switch (field_type) {
-        case INT32:
+        case RPC_INT32:
             if (pack->data.type != MSGPACK_OBJECT_POSITIVE_INTEGER) return -1;
-        case STRING:
+            break;
+        case RPC_STRING:
             if (pack->data.type != MSGPACK_OBJECT_STR) return -1;
-        case FLOAT:
+            break;
+        case RPC_FLOAT:
             if (pack->data.type != MSGPACK_OBJECT_FLOAT32) return -1;
+            break;
         default:
             fprintf(stderr, "unknown field type=%d\n", field_type);
             return -1;
@@ -260,16 +277,19 @@ PyObject *unpack_field(rpc_field_t *field, msgpack_unpacker_t *unpacker)
     msgpack_unpack_return ret;
     ret = msgpck_unpacker_next_pack(unpacker);
     if (ret == MSGPACK_UNPACK_SUCCESS) {
-        if (check_unpack_field_type(field->type, &unpacker->pack) == -1) return NULL;
+        if (check_unpack_field_type(field->type, &unpacker->pack) == -1) {
+            printf("unpack field type error. expected_type=%d, get_type=%d\n", field->type, unpacker->pack.data.type);
+            return NULL;
+        }
 
         switch(field->type) {
-            case INT32:
+            case RPC_INT32:
                 return PyLong_FromLong(unpacker->pack.data.via.u64);
-            case STRING: 
-                return PyUnicode_FromString(unpacker->pack.data.via.str.ptr);
-            case FLOAT:
+            case RPC_STRING: 
+                return PyUnicode_FromStringAndSize(unpacker->pack.data.via.str.ptr, unpacker->pack.data.via.str.size);
+            case RPC_FLOAT:
                 return PyFloat_FromDouble(unpacker->pack.data.via.f64);
-            case STRUCT:
+            case RPC_STRUCT:
                 {
                     rpc_struct_t *pstruct = get_struct_by_id(field->struct_id);
                     if (pstruct == NULL) {
@@ -279,11 +299,11 @@ PyObject *unpack_field(rpc_field_t *field, msgpack_unpacker_t *unpacker)
                     return unpack_struct(pstruct, unpacker);
                 }
             default:
-                fprintf(stderr, "unknown field type=%d", field->type);
+                fprintf(stderr, "unknown field type=%d\n", field->type);
                 return NULL;
         }
     } else {
-        fprintf(stderr, "unpack is error ret=%d\n", ret);
+        fprintf(stderr, "get next field error. ret=%d\n", ret);
         return NULL;
     }
 
@@ -314,11 +334,12 @@ int unpack_args(rpc_args_t *args, PyObject *obj, msgpack_unpacker_t *unpacker)
                     PyTuple_SetItem(value, j, item);
                 }
             } else {
-                fprintf(stderr, "unpack is error ret=%d\n", ret);
+                fprintf(stderr, "get next pack error ret=%d\n", ret);
                 return -1;
             }
         } else {
             value = unpack_field(field, unpacker);
+            MY_PYOBJECT_PRINT(value, "test unpack rpc");
         }
         PyTuple_SetItem(obj, i, value);
     }
@@ -329,23 +350,12 @@ int unpack_args(rpc_args_t *args, PyObject *obj, msgpack_unpacker_t *unpacker)
 PyObject * unpack(rpc_function_t *function, msgpack_unpacker_t *unpacker)
 {
     PyObject *obj;
-    msgpack_unpack_return ret = msgpck_unpacker_next_pack(unpacker);
-    if (ret == MSGPACK_UNPACK_SUCCESS) {
-        if (GET_UNPACKER_PACK_TYPE(unpacker) != MSGPACK_OBJECT_ARRAY) {
-            return NULL;
-        }
-        if ((unsigned)function->args.arg_cnt != unpacker->pack.data.via.array.size) {
-            return NULL;
-        }
-        obj = PyTuple_New(unpacker->pack.data.via.array.size);
-        if (unpack_args(&function->args, obj, unpacker)) {
-            return NULL;
-        }
-        return obj;
-    } else {
-        fprintf(stderr, "unpacker unpack error.ret=%d\n", ret);
+    obj = PyTuple_New(function->args.arg_cnt);
+    if (unpack_args(&function->args, obj, unpacker) < 0) {
+        Py_DECREF(obj);
         return NULL;
     }
+    return obj;
 }
 
 int create_rpc_table()
@@ -355,7 +365,7 @@ int create_rpc_table()
     size_t len = 0;
     ssize_t read;
 
-    fp = fopen("./rpc.cfg", "r");
+    fp = fopen("./rpc/rpc.cfg", "r");
     if (fp == NULL) {
         printf("open rpc.cfg fail\n");
         return 1;
@@ -396,17 +406,67 @@ int create_rpc_table()
     char name[200];
     char module[200];
     int c_imp;
-    int arg_count;
-    rpc_function_t *functionp;
-    while ((read = getline(&line, &len, fp)) != -1) {
-       sscanf(line, "function_id:%d,cpp_imp:%d,arg_count:%d,module:%[^,]%*cfunction_name:%s\n", &id, &c_imp, &arg_count, module, name);
-       rpc_function_t *functionp = g_function_rpc_table.table+id;
-       if (functionp) {
-           functionp->id = id;
-           functionp->name = strdup(name);
-           functionp->module = strdup(module);
-           functionp->c_imp = c_imp;
-       }
+    int arg_num;
+    int deamon;
+    rpc_function_t *function;
+    for (int i = 0; i < function_num; i++) {
+        getline(&line, &len, fp);
+        sscanf(line, "function_id:%d,arg_num:%d,module=%[^,]%*cfunction=%s,c_imp=%d,deamon=%d", &id, &arg_num, module, name, &c_imp, &deamon);
+        rpc_function_t *function = g_function_rpc_table.table + i;
+        function->id = id;
+        function->name = strdup(name);
+        function->module = strdup(module);
+        function->c_imp = c_imp;
+        function->deamon = deamon;
+        function->args.arg_cnt = arg_num;
+        function->args.arg_list = calloc(arg_num, sizeof(rpc_field_t));
+        for (int j = 0; j < arg_num; j++) {
+            field = function->args.arg_list + j;
+            getline(&line, &len, fp);
+            sscanf(line, "arg_type:%d,struct_id:%d,array:%d", &field->type, &field->struct_id, &field->array);
+        }
     }
     log_info("create rpc table success!");
+    void rpc_test();
+    rpc_test();
+}
+
+void rpc_test()
+{
+/*
+    msgpack_sbuffer sbuf;
+    PyObject *value = PyTuple_New(1);
+    PyObject *item = PyUnicode_FromString("hello world");
+    PyTuple_SetItem(value, 0, item);
+    int res = pack(1, value, &sbuf);
+    assert(res == 0);
+    MY_PYOBJECT_PRINT(value, "test rpc11");
+
+    printf("sbuf.data=%s,sbuf.size=%d\n", sbuf.data, sbuf.size);
+
+    msgpack_unpacker_t unpacker;
+    construct_msgpack_unpacker(&unpacker, sbuf.data, sbuf.size);
+    rpc_function_t * function = g_function_rpc_table.table + 0;
+    PyObject * obj = unpack(function, &unpacker);
+    assert(obj != 0);
+    MY_PYOBJECT_PRINT(obj, "test rpc");
+*/
+    msgpack_sbuffer sbuf;
+    PyObject *value = PyTuple_New(2);
+    PyObject *item1 = PyUnicode_FromString("hello world");
+    PyObject *item2 = PyLong_FromLong(100);
+    PyTuple_SetItem(value, 0, item1);
+    PyTuple_SetItem(value, 1, item2);
+    int res = pack(1, value, &sbuf);
+    assert(res == 0);
+    MY_PYOBJECT_PRINT(value, "test rpc11");
+
+    printf("sbuf.data=%s,sbuf.size=%d\n", sbuf.data, sbuf.size);
+
+    msgpack_unpacker_t unpacker;
+    construct_msgpack_unpacker(&unpacker, sbuf.data, sbuf.size);
+    rpc_function_t * function = g_function_rpc_table.table + 0;
+    PyObject * obj = unpack(function, &unpacker);
+    assert(obj != 0);
+    MY_PYOBJECT_PRINT(obj, "test rpc");
 }

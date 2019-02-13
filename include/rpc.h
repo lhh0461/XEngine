@@ -9,10 +9,10 @@ extern "C" {
 #include <Python.h>
 
 enum field_type_s {
-    INT32 = 1,
-    STRING = 2,
-    STRUCT = 3,
-    FLOAT = 4,
+    RPC_INT32 = 1,
+    RPC_STRING = 2,
+    RPC_STRUCT = 3,
+    RPC_FLOAT = 4,
 };
 
 typedef struct rpc_field_s
@@ -67,7 +67,7 @@ typedef struct headr_s
     int paylen;
 } header_t;
 
-int pack(int pid, PyObject *obj, msgpack_sbuffer *sbuf);
+void rpc_test();
 
 #ifdef __cplusplus 
 }

@@ -5,6 +5,7 @@ CFLAGS=-W -g
 CXX=g++
 CXXFLAGS=-W -std=c++11 -g
 PKG_FLAG=`pkg-config --libs --cflags glib-2.0`
+LINK=-Wl,-rpath,$(JEMALLOC_DIR)/lib
 
 LIB_DIR:=lib
 SRC_DIR:=src
@@ -15,6 +16,7 @@ PROTO_DIR:=$(THIRD_PART_DIR)/protobuf
 MONGOC_DIR:=$(THIRD_PART_DIR)/mongo-c-driver
 BSON_DIR:=$(THIRD_PART_DIR)/mongo-c-driver
 MSGPACK_DIR:=$(THIRD_PART_DIR)/msgpack
+JEMALLOC_DIR:=$(THIRD_PART_DIR)/jemalloc
 
 INC_FILES:=-I$(INC_DIR) \
 	-I$(LIB_DIR)/include \
@@ -35,17 +37,19 @@ LIBS=-L$(LIB_DIR)/lib \
 	-L$(LIBEVENT_DIR)/lib \
 	-L$(PROTO_DIR)/lib \
 	-L$(MONGOC_DIR)/lib \
-	-L$(MSGPACK_DIR)/lib
+	-L$(MSGPACK_DIR)/lib \
+	-L$(JEMALLOC_DIR)/lib
 
 STATIC_LIBS= -levent  \
 	-lpython3.5m \
 	-lprotobuf \
 	-lmongoc-1.0 \
 	-lbson-1.0 \
+	-ljemalloc \
 	-lmsgpackc
 
 all:$(C_OBJ_FILES)
-	$(CC) $(CFLAGS) $(C_OBJ_FILES) $(CXX_OBJ_FILES) -o $(PROJECT) $(LIBS) $(STATIC_LIBS) $(PKG_FLAG)
+	$(CC) $(CFLAGS) $(C_OBJ_FILES) $(CXX_OBJ_FILES) -o $(PROJECT) $(LIBS) $(STATIC_LIBS) $(PKG_FLAG) $(LINK)
 
 $(SRC_DIR)/%.o:$(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) $< -c -o $@ $(INC_FILES) $(LIBS) $(STATIC_LIBS) $(PKG_FLAG)
@@ -58,4 +62,4 @@ clean:
 	-rm $(PROJECT)
 	-rm -rf $(SRC_DIR)/*.o
 rpc:
-	python tools/parse_rpc.py
+	@python tools/parse_rpc.py

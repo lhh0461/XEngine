@@ -65,3 +65,4 @@ int marshal_dirty(PyObject *mp, marshal_array_t *arr);
 void free_dirty_dict_recurse(PyDirtyDictObject *map);
 
 #endif //__DIRTY_H__
+

@@ -2,14 +2,9 @@
     "MODULE_LIST":[
         {
             "STRUCT_LIST":{
-                "test_t" : [
-                    {"NAME":"sex", "TYPE":"int", "ARRAY":0},
-                    {"NAME":"icon", "TYPE": "string","ARRAY":1}
-                ],
                 "hello_req" : [
                     {"NAME":"uid", "TYPE":"int", "ARRAY":0, "DEFAULT":0},
-                    {"NAME":"msg", "TYPE": "string","ARRAY":1},
-                    {"NAME":"test_struct","TYPE":"struct","STRUCT":"test_t","ARRAY":1}
+                    {"NAME":"msg", "TYPE": "string","ARRAY":1}
                 ]
             },
             "MODULE_PATH":"module/helloworld",
@@ -27,21 +22,26 @@
                             "ARRAY":0
                         }
                     ],
-                    "DESCRIPTION":"测试协议",
                     "C_IMP":1,
-                    "DEAMON":1
+                    "DEAMON":1,
+                    "DESCRIPTION":"测试协议"
                 },
                 {
-                    "FUNCTION_NAME":"rpc_client_helloworld_ret",
+                    "FUNCTION_NAME":"rpc_server_test",
                     "ARG_LIST":[
                         {
-                            "TYPE":"string",
+                            "TYPE":"struct",
+                            "ARRAY":0,
+                            "STRUCT":"hello_req"
+                        },
+                        {
+                            "TYPE":"int",
                             "ARRAY":0
                         }
                     ],
-                    "C_IMP":0,
-                    "DESCRIPTION":"测试返回协议",
-                    "DEAMON":1
+                    "C_IMP":1,
+                    "DEAMON":1,
+                    "DESCRIPTION":"测试协议"
                 }
             ]
         }

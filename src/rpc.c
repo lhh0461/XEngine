@@ -92,26 +92,38 @@ int pack_struct(rpc_struct_t *pstruct, PyObject *obj, msgpack_packer *pck)
 {
     rpc_field_t *field;
     PyObject *item;
-    assert(PyDict_CheckExact(obj) || PyDirtyDict_CheckExact(obj));
+    PyObject *key;
+    if (!PyDict_CheckExact(obj) && !PyDirtyDict_CheckExact(obj)) {
+        fprintf(stderr, "pack struct obj must be dict.\n");
+        assert(0);
+    }
 
     for (int i = 0; i < pstruct->field_cnt; i++) {
         field = pstruct->field_list + i;
-        item = PyObject_GetItem(obj, PyUnicode_FromString(field->name));
+        key = PyUnicode_FromString(field->name);
+        item = PyDict_GetItem(obj, key);
+        Py_DECREF(key);
+        if (item == NULL) {
+            fprintf(stderr, "pack struct error lack of field. field_name:%s\n", field->name);
+            return -1;
+        }
+
         if (field->array == 1) {
             if (!PyList_CheckExact(item)) {
                 fprintf(stderr, "expected field type is list\n");
                 return -1;
             }
             Py_ssize_t size = PyList_Size(item);
-            msgpack_pack_array(pck, size); 
-            for (int j = 0; j < pstruct->field_cnt; j++) {
-                pack_field(field, obj, pck);
+            msgpack_pack_int(pck, size); 
+            for (int j = 0; j < size; j++) {
+                if (pack_field(field, PyList_GetItem(item, j), pck) == -1) return -1;
             }
 
         } else {
-            pack_field(field, item, pck);
+            if (pack_field(field, item, pck) == -1) return -1;
         }
     }
+    return 0;
 }
 
 int pack_field(rpc_field_t *field, PyObject *item, msgpack_packer *pck)
@@ -131,8 +143,8 @@ int pack_field(rpc_field_t *field, PyObject *item, msgpack_packer *pck)
                 const char *str = PyUnicode_AsUTF8AndSize(item, &size);
                 msgpack_pack_str(pck, size); 
                 msgpack_pack_str_body(pck, str, size); 
+                break;
             }
-            break;
         case RPC_FLOAT:
             msgpack_pack_double(pck, PyFloat_AS_DOUBLE(item));
             break;
@@ -150,11 +162,16 @@ int pack_field(rpc_field_t *field, PyObject *item, msgpack_packer *pck)
             fprintf(stderr, "unknown field type=%d", field->type);
             return -1;
     }
+    return 0;
 }
 
 int pack_args(rpc_args_t *args, PyObject *obj, msgpack_packer *pck)
 {
     assert(PyTuple_CheckExact(obj));
+    if (PyTuple_Size(obj) != args->arg_cnt) {
+        fprintf(stderr, "pack error: tuple obj size is not equal to args cnt\n");
+        return -1;
+    }
 
     rpc_field_t *field;
     PyObject *item;
@@ -162,13 +179,14 @@ int pack_args(rpc_args_t *args, PyObject *obj, msgpack_packer *pck)
     for (int i = 0; i < args->arg_cnt; i++) {
         field = args->arg_list + i;
         item = PyTuple_GetItem(obj, i);
+        
         if (field->array == 1) {
             if (!PyList_CheckExact(item)) {
-                fprintf(stderr, "expected field type is list\n");
+                fprintf(stderr, "pack args expected field type is list\n");
                 return -1;
             }
             Py_ssize_t size = PyList_Size(item);
-            msgpack_pack_array(pck, size); 
+            msgpack_pack_unsigned_int(pck, size); 
             for (int i = 0; i < args->arg_cnt; i++) {
                 if (pack_field(field, item, pck) != 0) return -1;
             }
@@ -212,23 +230,32 @@ PyObject *unpack_struct(rpc_struct_t *pstruce, msgpack_unpacker_t *unpacker)
     PyObject *key, *value, *item;
     msgpack_unpack_return ret;
     PyObject *dict = PyDict_New();
+    if (dict == NULL) return NULL;
 
     for (int i = 0; i < pstruce->field_cnt; i++) {
         field = pstruce->field_list + i;
+        fprintf(stderr, "unpack struct array field name!!!%s\n", field->name);
         if (field->array == 1) {
+            //先取出数组
             ret = msgpck_unpacker_next_pack(unpacker);
             if (ret == MSGPACK_UNPACK_SUCCESS) {
-                if (GET_UNPACKER_PACK_TYPE(unpacker) != MSGPACK_OBJECT_ARRAY) {
-                    fprintf(stderr, "expected field is array\n");
+                if (GET_UNPACKER_PACK_TYPE(unpacker) != MSGPACK_OBJECT_POSITIVE_INTEGER) {
+                    fprintf(stderr, "unpack struct expected field is array\n");
                     goto error;
                 }
-                value = PyTuple_New(unpacker->pack.data.via.array.size);
-                for (unsigned int j = 0; j < unpacker->pack.data.via.array.size; j++) {
+                int size = unpacker->pack.data.via.u64;
+                value = PyTuple_New(size);
+                if (value == NULL) { 
+                    goto error;
+                }
+                for (int j = 0; j < size; j++) {
                     item = unpack_field(field, unpacker); 
-                    if (value == NULL) {
+                    if (item == NULL) {
                         goto error;
                     }
-                    PyTuple_SetItem(value, j, item);
+                    if (PyTuple_SetItem(value, j, item) == -1) {
+                        goto error;
+                    }
                 }
             } else {
                 fprintf(stderr, "unpack struct is error ret=%d\n", ret);
@@ -242,7 +269,14 @@ PyObject *unpack_struct(rpc_struct_t *pstruce, msgpack_unpacker_t *unpacker)
         }
         
         key = PyUnicode_FromString(field->name);
-        PyDict_SetItem(dict, key, value);
+        if (PyDict_SetItem(dict, key, value) == 0) {
+            Py_DECREF(key);
+            Py_DECREF(value);
+        } else {
+            Py_DECREF(key);
+            Py_DECREF(value);
+            goto error;
+        }
     }
     return dict;
 error:
@@ -250,63 +284,77 @@ error:
     return NULL; 
 }
 
-int check_unpack_field_type(int field_type, msgpack_unpacked *pack)
-{
-    switch (field_type) {
-        case RPC_INT32:
-            if (pack->data.type != MSGPACK_OBJECT_POSITIVE_INTEGER) return -1;
-            break;
-        case RPC_STRING:
-            if (pack->data.type != MSGPACK_OBJECT_STR) return -1;
-            break;
-        case RPC_FLOAT:
-            if (pack->data.type != MSGPACK_OBJECT_FLOAT32) return -1;
-            break;
-        default:
-            fprintf(stderr, "unknown field type=%d\n", field_type);
-            return -1;
-    }
-    return 0;
-}
-
+/*
+typedef enum {
+    MSGPACK_OBJECT_NIL                  = 0x00,
+    MSGPACK_OBJECT_BOOLEAN              = 0x01,
+    MSGPACK_OBJECT_POSITIVE_INTEGER     = 0x02,
+    MSGPACK_OBJECT_NEGATIVE_INTEGER     = 0x03,
+    MSGPACK_OBJECT_FLOAT32              = 0x0a,
+    MSGPACK_OBJECT_FLOAT64              = 0x04,
+    MSGPACK_OBJECT_FLOAT                = 0x04,
+    MSGPACK_OBJECT_STR                  = 0x05,
+    MSGPACK_OBJECT_ARRAY                = 0x06,
+    MSGPACK_OBJECT_MAP                  = 0x07,
+    MSGPACK_OBJECT_BIN                  = 0x08,
+    MSGPACK_OBJECT_EXT                  = 0x09
+} msgpack_object_type;
+*/
 
 //return obj 正常
 //return null 异常
 PyObject *unpack_field(rpc_field_t *field, msgpack_unpacker_t *unpacker)
 {
     msgpack_unpack_return ret;
-    ret = msgpck_unpacker_next_pack(unpacker);
-    if (ret == MSGPACK_UNPACK_SUCCESS) {
-        if (check_unpack_field_type(field->type, &unpacker->pack) == -1) {
-            printf("unpack field type error. expected_type=%d, get_type=%d\n", field->type, unpacker->pack.data.type);
-            return NULL;
-        }
-
-        switch(field->type) {
-            case RPC_INT32:
-                return PyLong_FromLong(unpacker->pack.data.via.u64);
-            case RPC_STRING: 
-                return PyUnicode_FromStringAndSize(unpacker->pack.data.via.str.ptr, unpacker->pack.data.via.str.size);
-            case RPC_FLOAT:
-                return PyFloat_FromDouble(unpacker->pack.data.via.f64);
-            case RPC_STRUCT:
-                {
-                    rpc_struct_t *pstruct = get_struct_by_id(field->struct_id);
-                    if (pstruct == NULL) {
-                        fprintf(stderr, "field struct id invalid\n");
-                        return NULL;
-                    }
-                    return unpack_struct(pstruct, unpacker);
-                }
-            default:
-                fprintf(stderr, "unknown field type=%d\n", field->type);
+    switch(field->type) {
+        case RPC_INT32:
+            ret = msgpck_unpacker_next_pack(unpacker);
+            if (ret != MSGPACK_UNPACK_SUCCESS) {
+                goto unpack_error;
+            }
+            if (unpacker->pack.data.type != MSGPACK_OBJECT_POSITIVE_INTEGER) { 
+                printf("unpack field type error. expected type is int, but get type:%d, field_name=%s\n", unpacker->pack.data.type, field->name);
                 return NULL;
-        }
-    } else {
-        fprintf(stderr, "get next field error. ret=%d\n", ret);
-        return NULL;
+            }
+            return PyLong_FromLong(unpacker->pack.data.via.u64);
+        case RPC_STRING: 
+            ret = msgpck_unpacker_next_pack(unpacker);
+            if (ret != MSGPACK_UNPACK_SUCCESS) {
+                goto unpack_error;
+            }
+            if (unpacker->pack.data.type != MSGPACK_OBJECT_STR) { 
+                printf("unpack field type error. expected type is string, but get type:%d, field_name=%s\n", unpacker->pack.data.type, field->name);
+                return NULL;
+            }
+            return PyUnicode_FromStringAndSize(unpacker->pack.data.via.str.ptr, unpacker->pack.data.via.str.size);
+        case RPC_FLOAT:
+            ret = msgpck_unpacker_next_pack(unpacker);
+            if (ret != MSGPACK_UNPACK_SUCCESS) {
+                msgpack_object_print(stderr, unpacker->pack.data);
+                goto unpack_error;
+            }
+            if (unpacker->pack.data.type != MSGPACK_OBJECT_FLOAT32) { 
+                printf("unpack field type error. expected type is float, but get type:%d, field_name=%s\n", unpacker->pack.data.type, field->name);
+                return NULL;
+            }
+            return PyFloat_FromDouble(unpacker->pack.data.via.f64);
+        case RPC_STRUCT:
+            {
+                rpc_struct_t *pstruct = get_struct_by_id(field->struct_id);
+                if (pstruct == NULL) {
+                    fprintf(stderr, "field struct id invalid\n");
+                    return NULL;
+                }
+                return unpack_struct(pstruct, unpacker);
+            }
+        default:
+            fprintf(stderr, "unpack unknown field type=%d\n", field->type);
+            return NULL;
     }
 
+    return NULL;
+unpack_error:
+    fprintf(stderr, "unpack next pack error.\n");
     return NULL;
 }
 
@@ -322,15 +370,21 @@ int unpack_args(rpc_args_t *args, PyObject *obj, msgpack_unpacker_t *unpacker)
     for (int i = 0; i < args->arg_cnt; i++) {
         field = args->arg_list + i;
         if (field->array == 1) {
+            //取出数组
             ret = msgpck_unpacker_next_pack(unpacker);
             if (ret == MSGPACK_UNPACK_SUCCESS) {
-                if (GET_UNPACKER_PACK_TYPE(unpacker) != MSGPACK_OBJECT_ARRAY) {
-                    fprintf(stderr, "expected field is array\n");
+                if (GET_UNPACKER_PACK_TYPE(unpacker) != MSGPACK_OBJECT_POSITIVE_INTEGER) {
+                    fprintf(stderr, "unpack error arg field expected is array\n");
                     return -1;
                 }
-                value = PyTuple_New(unpacker->pack.data.via.array.size);
-                for (unsigned j = 0; j < unpacker->pack.data.via.array.size; j++) {
+                int size = unpacker->pack.data.via.u64;
+                value = PyTuple_New(size);
+                for (int j = 0; j < size; j++) {
                     item = unpack_field(field, unpacker); 
+                    if (item == NULL) {
+                        Py_DECREF(value);
+                        return -1;
+                    }
                     PyTuple_SetItem(value, j, item);
                 }
             } else {
@@ -339,7 +393,9 @@ int unpack_args(rpc_args_t *args, PyObject *obj, msgpack_unpacker_t *unpacker)
             }
         } else {
             value = unpack_field(field, unpacker);
-            MY_PYOBJECT_PRINT(value, "test unpack rpc");
+            if (value == NULL) {
+                return -1;
+            }
         }
         PyTuple_SetItem(obj, i, value);
     }
@@ -351,6 +407,7 @@ PyObject * unpack(rpc_function_t *function, msgpack_unpacker_t *unpacker)
 {
     PyObject *obj;
     obj = PyTuple_New(function->args.arg_cnt);
+
     if (unpack_args(&function->args, obj, unpacker) < 0) {
         Py_DECREF(obj);
         return NULL;
@@ -384,14 +441,14 @@ int create_rpc_table()
     rpc_field_t *field;
     for (int i = 0; i < struct_num; i++) {
         getline(&line, &len, fp);
-        sscanf(line, "struct_id:%d,field_num:%d,struct_name=%s", &struct_id, &field_count, struct_name);
+        assert(sscanf(line, "struct_id:%d,field_num:%d,struct_name=%s", &struct_id, &field_count, struct_name) == 3);
         pstruct = g_struct_rpc_table.table + i;
         pstruct->field_cnt = field_count;
         pstruct->field_list = calloc(field_count, sizeof(rpc_field_t));
         for (int j = 0; j < field_count; j++) {
             field = pstruct->field_list + j;
             getline(&line, &len, fp);
-            sscanf(line, "field_type:%d,struct_id:%d,array:%d,field_name=%s", &field->type, &field->struct_id, &field->array, field_name);
+            assert(sscanf(line, "field_type:%d,struct_id:%d,array:%d,field_name=%s", &field->type, &field->struct_id, &field->array, field_name) == 4);
             field->name = strdup(field_name);
         }
     }
@@ -453,19 +510,29 @@ void rpc_test()
 */
     msgpack_sbuffer sbuf;
     PyObject *value = PyTuple_New(2);
-    PyObject *item1 = PyUnicode_FromString("hello world");
+    PyObject *item1 = PyDict_New();
+    PyDict_SetItem(item1, PyUnicode_FromString("uid"), PyLong_FromLong(12345));
+    PyObject *list1 = PyList_New(1);
+    PyList_SetItem(list1, 0, PyUnicode_FromString("world"));
+    PyDict_SetItem(item1, PyUnicode_FromString("msg"), list1);
+    //PyObject *subdict = PyDict_New();
+    //PyDict_SetItem(subdict, PyUnicode_FromString("sex"), PyLong_FromLong(1));
+    //PyDict_SetItem(subdict, PyUnicode_FromString("icon"), PyUnicode_FromString("1234"));
+    //PyDict_SetItem(item1, PyUnicode_FromString("test_struct"), subdict);
+    //PyDict_SetItem(item1, PyUnicode_FromString("test_struct"), subdict);
+
     PyObject *item2 = PyLong_FromLong(100);
     PyTuple_SetItem(value, 0, item1);
     PyTuple_SetItem(value, 1, item2);
-    int res = pack(1, value, &sbuf);
+    int res = pack(2, value, &sbuf);
     assert(res == 0);
     MY_PYOBJECT_PRINT(value, "test rpc11");
 
-    printf("sbuf.data=%s,sbuf.size=%d\n", sbuf.data, sbuf.size);
+    printf("sbuf.data=%s,sbuf.size=%ld\n", sbuf.data, sbuf.size);
 
     msgpack_unpacker_t unpacker;
     construct_msgpack_unpacker(&unpacker, sbuf.data, sbuf.size);
-    rpc_function_t * function = g_function_rpc_table.table + 0;
+    rpc_function_t * function = g_function_rpc_table.table + 1;
     PyObject * obj = unpack(function, &unpacker);
     assert(obj != 0);
     MY_PYOBJECT_PRINT(obj, "test rpc");

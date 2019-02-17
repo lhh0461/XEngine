@@ -111,7 +111,7 @@ void gamed_startup()
         fprintf(stderr, "Failed to load \"%s\"\n", "db");
     }
     printf("on gamed_startup2!!!\n");
-    pModule = PyImport_ImportModule("test1");
+    pModule = PyImport_ImportModule("test_dirty");
     if (pModule == NULL) {
         if (PyErr_Occurred()) {
             fprintf(stderr, "Failed to load1111 \"%s\"\n", "test1");

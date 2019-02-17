@@ -4,10 +4,12 @@
 #存盘的子文档存放再各自玩法
 
 #doc name start
-HELLO_WORLD_DOC = "test"
+TEST_SYNC_DOC = "sync_test"
+TEST_ASYNC_DOC = "async_test"
 #doc name end
 
 #
 ALL_DOC_LIST = {
-    HELLO_WORLD_DOC:1,
+    TEST_SYNC_DOC:1,
+    TEST_ASYNC_DOC:1,
 }

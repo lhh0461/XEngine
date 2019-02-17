@@ -102,7 +102,7 @@ void init_python_vm()
 {
     init_dirty_module();
     Py_Initialize();
-    PyRun_SimpleString("import sys\nsys.path.append(\"../logic\")");
+    PyRun_SimpleString("import sys\nsys.path.append(\"./script\")");
 }
 
 void destroy_python_vm()

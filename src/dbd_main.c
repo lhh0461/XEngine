@@ -567,13 +567,13 @@ int save_db_obj_dirty(db_obj_t *obj, db_key_t *dbkey, bson_t *set, bson_t *unset
 	collection = mongoc_client_get_collection(client, "q1", "dat"); 
 
 	if (!bson_empty(set)) {
-		if(!mongoc_collection_update(collection,MONGOC_UPDATE_NONE,&selector,set,NULL,&error)) {
-			LOG_MONGOC_ERROR(error); 
-			QTZ_BSON_PRINT(&selector, "show select bson");
-			QTZ_BSON_PRINT(set, "show set bson");
-		}
+        if(!mongoc_collection_update(collection,MONGOC_UPDATE_NONE,&selector,set,NULL,&error)) {
+            LOG_MONGOC_ERROR(error); 
+            QTZ_BSON_PRINT(&selector, "show select bson");
+            QTZ_BSON_PRINT(set, "show set bson");
+        }
 
-		bson_clear(&set); 
+        bson_clear(&set); 
 	}
 
 	if (!bson_empty(unset)) {

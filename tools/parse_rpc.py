@@ -158,7 +158,7 @@ def write_file():
                     format(struct_id=struct_id, field_num=len(struct_data), struct_name=struct_name)) 
             for field_data in struct_data:
                 struct_id = struct_name2id.get(field_data["struct"],0) 
-                f.write('fiele_type:{field_type},struct_id:{struct_id},array:{array},field_name={field_name}\n'.
+                f.write('field_type:{field_type},struct_id:{struct_id},array:{array},field_name={field_name}\n'.
                     format(field_type=field_data["type"], struct_id=struct_id, array=field_data["array"], field_name=field_data["name"])) 
             
         f.write('function_table_num:{num}\n'.format(num=len(all_function_list))) 

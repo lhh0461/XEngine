@@ -1,4 +1,5 @@
 #include "network.h"
+#include "start_up.h"
 
 void on_client_connection_recv(struct bufferevent *bev, void *ctx)
 {
@@ -53,4 +54,5 @@ void gated_init()
 
 void gated_startup()
 {
+    open_client_service();
 }

@@ -31,7 +31,7 @@ static void on_recv_db_obj_data(void *arg, dg_msg_header_t *header, void *data, 
     handle_new_dirty_subdocs(dict);
     */
 
-    call_script_func("db", "on_db_obj_async_load_succ", args);
+    call_script_function("db", "on_db_obj_async_load_succ", args);
 }
 
 static void dbd_msg_dispatch(void *arg, dg_msg_header_t *header, void *data, size_t len)
@@ -89,38 +89,35 @@ int connect_to_dbd()
     g_sync_dbd_fd = sync_dbd_fd;
 }
 
+int connect_to_gated()
+{
+    //TODO 从配置读取
+    int dbd_fd = net_connect("127.0.0.1", 6666, 1);
+    g_dbd_connection = connection_new(ev_base, dbd_fd, on_dbd_connection_recv, on_dbd_connection_write, 
+            on_dbd_connection_error, NULL);
+
+    int sync_dbd_fd = net_connect("127.0.0.1", 6666, 1);
+    if (sync_dbd_fd < 0) {
+        printf("exit for fail to sync connect dbd\n");
+    }
+    g_sync_dbd_fd = sync_dbd_fd;
+}
+
 void gamed_init()
 {
     dirty_mem_pool_setup();
 
     connect_to_dbd();
+    connect_to_gated();
 }
 
-//#include "marshal.h"
-//#include "bson_format.h"
 void gamed_startup()
 {
-    //format_test();
-    //marshal_test();
 
-    printf("on gamed_startup!!!\n");
-    PyObject * pModule = PyImport_ImportModule("db");
+    PyObject * pModule = PyImport_ImportModule("preload");
     if (pModule == NULL) {
         if (PyErr_Occurred())
             PyErr_Print();
-        fprintf(stderr, "Failed to load \"%s\"\n", "db");
+        fprintf(stderr, "Failed to load \"%s\"\n", "preload");
     }
-    printf("on gamed_startup2!!!\n");
-    pModule = PyImport_ImportModule("test_dirty");
-    if (pModule == NULL) {
-        if (PyErr_Occurred()) {
-            fprintf(stderr, "Failed to load1111 \"%s\"\n", "test1");
-            PyErr_Print();
-        }
-        fprintf(stderr, "Failed to load \"%s\"\n", "test1");
-    }
-    printf("on gamed_startup3!!!\n");
-
-    //int res = pack(1, PyObject *obj, msgpack_sbuffer *sbuf)
-
 }

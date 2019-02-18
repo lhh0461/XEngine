@@ -23,7 +23,7 @@ static inline void construct_msgpack_unpacker(msgpack_unpacker_t *unpacker, char
     unpacker->offset = 0;
 }
 
-static inline void destroy_msgpack_unpackert(msgpack_unpacker_t *unpacker)
+static inline void destroy_msgpack_unpacker(msgpack_unpacker_t *unpacker)
 {
     msgpack_unpacked_destroy(&unpacker->pack);
 }

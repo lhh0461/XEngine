@@ -29,65 +29,6 @@ rpc_function_t * get_function_by_id(int function_id)
     return g_function_rpc_table.table + function_id - 1;
 }
 
-int call_c_function(rpc_function_t *functionp)
-{
-
-}
-
-int rpc_script_dispatch(rpc_function_t *function, msgpack_unpacker_t *unpacker)
-{
-    PyObject *obj = unpack(function, unpacker);
-    if (obj != NULL) {
-        return call_script_func(function->module, function->name, obj);
-    }
-    return -1;
-}
-
-//if return 0 success else fail
-int rpc_dispatch(int uid, char *buf, int len)
-{
-    int pid = 0;
-    msgpack_unpacker_t unpacker;
-    construct_msgpack_unpacker(&unpacker, buf, len);
-    if (unpacker.pack.data.type != MSGPACK_OBJECT_POSITIVE_INTEGER) {
-        return 1;
-    }
-    pid = (int)unpacker.pack.data.via.u64;
-    if (pid <= 0 || pid > g_function_rpc_table.size) return 1;
-
-    rpc_function_t * function = g_function_rpc_table.table + pid;
-    if (function->c_imp == 1) {
-        //return rpc_c_dispatch(function, &unpacker);
-    } else {
-        return rpc_script_dispatch(function, &unpacker);
-    }
-    //TODO
-error:
-    destroy_msgpack_unpackert(&unpacker);
-}
-
-int check_field_type(int field_type, PyObject *item)
-{
-    switch(field_type) {
-        case RPC_INT32:
-            if (!PyLong_CheckExact(item)) return -1;
-            break;
-        case RPC_STRING:
-            if (!PyUnicode_CheckExact(item)) return -1;
-            break;
-        case RPC_FLOAT:
-            if (!PyFloat_CheckExact(item)) return -1;
-            break;
-        case RPC_STRUCT:
-            if (!PyDict_CheckExact(item) && !PyDirtyDict_CheckExact(item)) return -1;
-            break;
-        default:
-            fprintf(stderr, "unknown field type=%d", field_type);
-            return -1;
-    }
-    return 0;
-}
-
 int pack_struct(rpc_struct_t *pstruct, PyObject *obj, msgpack_packer *pck)
 {
     rpc_field_t *field;
@@ -122,6 +63,28 @@ int pack_struct(rpc_struct_t *pstruct, PyObject *obj, msgpack_packer *pck)
         } else {
             if (pack_field(field, item, pck) == -1) return -1;
         }
+    }
+    return 0;
+}
+
+int check_field_type(int field_type, PyObject *item)
+{
+    switch(field_type) {
+        case RPC_INT32:
+            if (!PyLong_CheckExact(item)) return -1;
+            break;
+        case RPC_STRING:
+            if (!PyUnicode_CheckExact(item)) return -1;
+            break;
+        case RPC_FLOAT:
+            if (!PyFloat_CheckExact(item)) return -1;
+            break;
+        case RPC_STRUCT:
+            if (!PyDict_CheckExact(item) && !PyDirtyDict_CheckExact(item)) return -1;
+            break;
+        default:
+            fprintf(stderr, "unknown field type=%d", field_type);
+            return -1;
     }
     return 0;
 }
@@ -224,6 +187,7 @@ int pack(int pid, PyObject *obj, msgpack_sbuffer *sbuf)
     return pack_args(&function->args, obj, &pck);
 }
 
+//rpc unpack start
 PyObject *unpack_struct(rpc_struct_t *pstruce, msgpack_unpacker_t *unpacker)
 {
     rpc_field_t *field;
@@ -284,22 +248,6 @@ error:
     return NULL; 
 }
 
-/*
-typedef enum {
-    MSGPACK_OBJECT_NIL                  = 0x00,
-    MSGPACK_OBJECT_BOOLEAN              = 0x01,
-    MSGPACK_OBJECT_POSITIVE_INTEGER     = 0x02,
-    MSGPACK_OBJECT_NEGATIVE_INTEGER     = 0x03,
-    MSGPACK_OBJECT_FLOAT32              = 0x0a,
-    MSGPACK_OBJECT_FLOAT64              = 0x04,
-    MSGPACK_OBJECT_FLOAT                = 0x04,
-    MSGPACK_OBJECT_STR                  = 0x05,
-    MSGPACK_OBJECT_ARRAY                = 0x06,
-    MSGPACK_OBJECT_MAP                  = 0x07,
-    MSGPACK_OBJECT_BIN                  = 0x08,
-    MSGPACK_OBJECT_EXT                  = 0x09
-} msgpack_object_type;
-*/
 
 //return obj 正常
 //return null 异常
@@ -407,13 +355,88 @@ PyObject * unpack(rpc_function_t *function, msgpack_unpacker_t *unpacker)
 {
     PyObject *obj;
     obj = PyTuple_New(function->args.arg_cnt);
-
     if (unpack_args(&function->args, obj, unpacker) < 0) {
         Py_DECREF(obj);
         return NULL;
     }
     return obj;
 }
+
+int rpc_c_dispatch(int id, rpc_function_t *function, msgpack_unpacker_t *unpacker)
+{
+    PyObject *obj = unpack(function, unpacker);
+    if (obj != NULL) {
+        if (function->c_function != NULL) {
+            function->c_function(id, obj);
+            Py_DECREF(obj);
+            return 0;
+        }
+    }
+    return -1;
+}
+
+int rpc_script_dispatch(int id, rpc_function_t *function, msgpack_unpacker_t *unpacker)
+{
+    PyObject *obj = unpack(function, unpacker);
+    int ret;
+    if (obj != NULL) {
+         ret = call_script_function(function->module, function->name, obj);
+         Py_DECREF(obj);
+         return ret;
+    }
+    return -1;
+}
+
+//if return 0 success else fail
+int rpc_dispatch(int id, char *buf, int len)
+{
+    int pid = 0;
+    msgpack_unpacker_t unpacker;
+    int res;
+
+    construct_msgpack_unpacker(&unpacker, buf, len);
+    if (unpacker.pack.data.type != MSGPACK_OBJECT_POSITIVE_INTEGER) {
+        return -1;
+    }
+    pid = (int)unpacker.pack.data.via.u64;
+    if (pid <= 0 || pid > g_function_rpc_table.size) {
+        fprintf(stderr, "invalid rpc pid=%d,id=%d\n", pid, id);
+        destroy_msgpack_unpacker(&unpacker);
+        return -1;
+    }
+
+    rpc_function_t * function = g_function_rpc_table.table + pid;
+    if (function->c_imp == 1) {
+        res = rpc_c_dispatch(id, function, &unpacker);
+    } else {
+        res = rpc_script_dispatch(id, function, &unpacker);
+    }
+
+    destroy_msgpack_unpacker(&unpacker);
+    return res;
+}
+
+int rpc_send(int uid, int pid, PyObject *obj)
+{
+
+}
+
+/*
+typedef enum {
+    MSGPACK_OBJECT_NIL                  = 0x00,
+    MSGPACK_OBJECT_BOOLEAN              = 0x01,
+    MSGPACK_OBJECT_POSITIVE_INTEGER     = 0x02,
+    MSGPACK_OBJECT_NEGATIVE_INTEGER     = 0x03,
+    MSGPACK_OBJECT_FLOAT32              = 0x0a,
+    MSGPACK_OBJECT_FLOAT64              = 0x04,
+    MSGPACK_OBJECT_FLOAT                = 0x04,
+    MSGPACK_OBJECT_STR                  = 0x05,
+    MSGPACK_OBJECT_ARRAY                = 0x06,
+    MSGPACK_OBJECT_MAP                  = 0x07,
+    MSGPACK_OBJECT_BIN                  = 0x08,
+    MSGPACK_OBJECT_EXT                  = 0x09
+} msgpack_object_type;
+*/
 
 int create_rpc_table()
 {

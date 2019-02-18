@@ -10,8 +10,10 @@ enum gd_cmd_e {
     CMD_GAMED_TO_DBD_DB_OBJ_UNLOAD = 4,
     CMD_GAMED_TO_DBD_DB_OBJ_SAVE_DIRTY = 5,
     CMD_GAMED_TO_DBD_DB_OBJ_SAVE_DATA = 6,
+    CMD_GAMED_TO_DBD_RPC = 7,
     //dbd->gamed
-    CMD_DBD_TO_GAMED_DB_OBJ_DATA = 7,
+    CMD_DBD_TO_GAMED_DB_OBJ_DATA = 8,
+    CMD_DBD_TO_GAME_RPC = 9,
 };
 
 //gamd->dbd

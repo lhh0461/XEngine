@@ -35,6 +35,8 @@ typedef struct rpc_args_s
     rpc_field_t *arg_list;
 } rpc_args_t;
 
+typedef void (* rpc_c_function_t)(int id, PyObject *obj);
+
 typedef struct rpc_function_s
 {
     int id;
@@ -43,6 +45,7 @@ typedef struct rpc_function_s
     int c_imp;
     int deamon;
     rpc_args_t args;
+    rpc_c_function_t c_function;
 } rpc_function_t;
 
 typedef struct rpc_struct_talbe_s
@@ -57,9 +60,6 @@ typedef struct rpc_function_talbe_s
     int size;
 } rpc_function_table_t;
 
-int rpc_dispatch();
-int create_rpc_table();
-
 // 数据包头
 typedef struct headr_s
 {
@@ -67,7 +67,9 @@ typedef struct headr_s
     int paylen;
 } header_t;
 
-void rpc_test();
+int create_rpc_table();
+int rpc_dispatch(int id, char *buf, int len);
+int rpc_send(int id, int pid, PyObject *obj);
 
 #ifdef __cplusplus 
 }
